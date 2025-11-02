@@ -6,6 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const chalk = require('chalk');
 const Jimp = require('jimp');
+const axios = require('axios');
 const { downloadFromR2, deleteFromR2, getR2PublicUrl } = require('./lib/r2');
 
 const app = express();
@@ -119,9 +120,19 @@ async function generateAttendanceInvoice(attendances) {
         const pos = photoPositions[i];
         
         try {
-            // Load photo from R2 or local file
+            // Load photo from R2, CDN URL, or local file
             let photoBuffer;
-            if (att.foto_path.startsWith('http') || att.foto_path.startsWith('absen/')) {
+            if (att.foto_path.startsWith('http://') || att.foto_path.startsWith('https://')) {
+                // Photo is on CDN/public URL, download via HTTP
+                try {
+                    const response = await axios.get(att.foto_path, { responseType: 'arraybuffer' });
+                    photoBuffer = Buffer.from(response.data);
+                    console.log(`✅ Foto downloaded from CDN: ${att.foto_path}`);
+                } catch (httpError) {
+                    console.error('Error downloading from CDN:', httpError);
+                    throw new Error(`Failed to download from CDN: ${att.foto_path}`);
+                }
+            } else if (att.foto_path.startsWith('absen/')) {
                 // Photo is in R2
                 try {
                     const key = att.foto_path.includes('/') && !att.foto_path.startsWith('./')
@@ -226,9 +237,10 @@ app.get('/api/attendances', async (req, res) => {
             const result = { ...att };
             
             // Check if photo is in R2 or local
-            if (att.foto_path.startsWith('http')) {
+            if (att.foto_path.startsWith('http') || att.foto_path.startsWith('https')) {
                 // Photo has public URL, use it directly
                 result.foto_base64 = att.foto_path;
+                console.log(`✅ Using CDN URL for ${att.nama}: ${att.foto_path}`);
             } else if (att.foto_path.startsWith('absen/')) {
                 // Photo is in R2, get public URL or download
                 try {
@@ -410,9 +422,10 @@ app.get('/api/attendances/student/:nama', async (req, res) => {
             const result = { ...att };
             
             // Check if photo is in R2 or local
-            if (att.foto_path.startsWith('http')) {
+            if (att.foto_path.startsWith('http') || att.foto_path.startsWith('https')) {
                 // Photo has public URL, use it directly
                 result.foto_base64 = att.foto_path;
+                console.log(`✅ Using CDN URL for ${att.nama}: ${att.foto_path}`);
             } else if (att.foto_path.startsWith('absen/')) {
                 // Photo is in R2, get public URL or download
                 try {
@@ -586,7 +599,7 @@ app.delete('/api/attendances/:id', async (req, res) => {
         await Attendance.findByIdAndDelete(id);
         
         // Delete photo from R2 or local file
-        if (fotoPath.startsWith('http') || fotoPath.startsWith('absen/')) {
+        if (fotoPath.startsWith('http') || fotoPath.startsWith('https') || fotoPath.startsWith('absen/')) {
             // Photo is in R2
             try {
                 await deleteFromR2(fotoPath);

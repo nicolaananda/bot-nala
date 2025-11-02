@@ -6,7 +6,8 @@
   "type": "commonjs",
   "scripts": {
     "start": "node index.js && node dashboard-server.js",
-    "dashboard": "node dashboard-server.js"
+    "dashboard": "node dashboard-server.js",
+    "test-r2": "node test-r2.js"
   },
   "author": "ARAP MIUM",
   "license": "MIT",
