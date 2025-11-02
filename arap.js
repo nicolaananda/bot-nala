@@ -208,7 +208,7 @@ async function generateAttendanceInvoice(attendances) {
             
             printTextWithColor(invoice, fontSmall, pos.x, textY, `${dateStr}`);
             printTextWithColor(invoice, fontSmall, pos.x, textY + lineSpacing, att.deskripsi.substring(0, 25)); // Limit description length
-            printTextWithColor(invoice, fontMedium, pos.x, textY + (lineSpacing * 2), `Rp ${att.harga.toLocaleString('id-ID')}`);
+            printTextWithColor(invoice, fontSmall, pos.x, textY + (lineSpacing * 2), `Rp ${att.harga.toLocaleString('id-ID')}`);
         } catch (err) {
             console.error(`Error loading photo ${att.foto_path}:`, err);
             // Print error message if photo can't be loaded
