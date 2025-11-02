@@ -60,7 +60,27 @@ Jika R2 credentials tidak dikonfigurasi atau terjadi error:
 
 ## Testing
 
-Setelah setup, coba:
+### Test Koneksi R2
+
+Jalankan script test untuk memverifikasi koneksi R2:
+
+```bash
+npm run test-r2
+```
+
+Script ini akan:
+1. ✅ Mengecek apakah semua environment variables sudah ter-set
+2. 🧪 Test upload file ke R2
+3. 🧪 Test download file dari R2
+4. 🧪 Test public URL (jika dikonfigurasi)
+5. 🧪 Test delete file dari R2
+6. ✅ Verifikasi file sudah terhapus
+
+Jika semua test berhasil, berarti R2 sudah terkonfigurasi dengan benar!
+
+### Test Manual
+
+Setelah koneksi R2 terkonfirmasi, coba:
 1. Buat absensi baru dengan foto
 2. Cek console log untuk melihat `✅ Foto uploaded to R2: ...`
 3. Generate invoice untuk memastikan foto bisa di-download

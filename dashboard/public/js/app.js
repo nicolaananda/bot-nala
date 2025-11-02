@@ -142,7 +142,7 @@ async function loadAttendances(page = 1) {
                 const tr = document.createElement('tr');
                 const isChecked = selectedAttendances.has(att._id);
                 const fotoCell = att.foto_base64 
-                    ? `<td><img src="${att.foto_base64}" alt="Foto absensi" class="attendance-photo" onclick="openModal('${att.foto_base64}', '${att.nama}', '${formatDate(att.tanggal)}', '${att.deskripsi}', '${formatCurrency(att.harga)}')"></td>`
+                    ? `<td><img src="${att.foto_base64}" alt="Foto absensi" class="attendance-photo" crossorigin="anonymous" onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22%3E%3Ctext x=%2250%22 y=%2250%22 text-anchor=%22middle%22 dy=%22.3em%22 font-size=%2212%22%3EFoto tidak ditemukan%3C/text%3E%3C/svg%3E'; console.error('Failed to load image:', '${att.foto_base64}');" onclick="openModal('${att.foto_base64}', '${att.nama}', '${formatDate(att.tanggal)}', '${att.deskripsi}', '${formatCurrency(att.harga)}')"></td>`
                     : `<td>-</td>`;
                 
                 tr.innerHTML = `
