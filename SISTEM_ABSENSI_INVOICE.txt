@@ -1,0 +1,464 @@
+===============================================================
+SISTEM ABSENSI & INVOICE GENERATOR
+Documentation untuk Copy-Paste dari Proyek Baru
+===============================================================
+
+📋 DAFTAR ISI:
+1. Schema Database MongoDB
+2. Fungsi Generate Invoice
+3. Handler Absensi (Input Data)
+4. Command Invoice Manual
+5. Package Dependencies
+6. Struktur Folder
+
+===============================================================
+1. SCHEMA DATABASE MONGODB
+===============================================================
+
+Tambahkan di bagian atas file arap.js setelah mongoose connection:
+
+// Attendance Schema for Class Attendance System
+const attendanceSchema = new mongoose.Schema({
+    nama: { type: String, required: true },
+    harga: { type: Number, required: true },
+    tanggal: { type: Date, required: true },
+    deskripsi: { type: String, required: true },
+    foto_path: { type: String, required: true },
+    isInvoiced: { type: Boolean, default: false }, // Track if this attendance has been included in an invoice
+    createdAt: { type: Date, default: Date.now }
+});
+
+const Attendance = mongoose.model('Attendance', attendanceSchema);
+
+
+===============================================================
+2. FUNGSI GENERATE INVOICE
+===============================================================
+
+Tambahkan fungsi ini di file arap.js sebelum module.exports:
+
+// Helper: Generate attendance invoice with photos
+async function generateAttendanceInvoice(attendances) {
+    // Load invoice template
+    const templatePath = './images/invoice.png';
+    if (!fs.existsSync(templatePath)) {
+        // If template doesn't exist, create a blank canvas as fallback
+        console.log('Template invoice tidak ditemukan, menggunakan canvas kosong');
+        var invoice = new Jimp(800, 1200, 0xFFFFFFFF); // White background
+    } else {
+        invoice = await Jimp.read(templatePath);
+    }
+    
+    // Color for text: #70370d = rgb(112, 55, 13)
+    const textColor = 0x70370D; // RGB: 112, 55, 13
+    
+    // Load default Jimp fonts with larger sizes for better readability (for elderly parents)
+    let fontSmall, fontMedium, fontLarge;
+    try {
+        fontSmall = await Jimp.loadFont(Jimp.FONT_SANS_32_BLACK);
+        fontMedium = await Jimp.loadFont(Jimp.FONT_SANS_64_BLACK);
+        fontLarge = await Jimp.loadFont(Jimp.FONT_SANS_128_BLACK);
+    } catch (err) {
+        try {
+            fontSmall = await Jimp.loadFont(Jimp.FONT_SANS_32_BLACK);
+            fontMedium = await Jimp.loadFont(Jimp.FONT_SANS_64_BLACK);
+            fontLarge = await Jimp.loadFont(Jimp.FONT_SANS_64_BLACK);
+        } catch (err2) {
+            fontSmall = await Jimp.loadFont(Jimp.FONT_SANS_32_BLACK);
+            fontMedium = await Jimp.loadFont(Jimp.FONT_SANS_32_BLACK);
+            fontLarge = await Jimp.loadFont(Jimp.FONT_SANS_32_BLACK);
+        }
+    }
+    
+    // Helper function to print text with custom color (no background, bold effect)
+    const printTextWithColor = (img, font, x, y, text, color = textColor) => {
+        const r = (color >> 16) & 0xFF; // Extract RR = 112
+        const g = (color >> 8) & 0xFF;  // Extract GG = 55
+        const b = color & 0xFF;          // Extract BB = 13
+        
+        const textWidth = Jimp.measureText(font, text);
+        const textHeight = Jimp.measureTextHeight(font, text);
+        const padding = 10;
+        const tempImg = new Jimp(textWidth + padding * 2, textHeight + padding * 2, 0x00000000);
+        
+        tempImg.print(font, padding, padding, text);
+        
+        tempImg.scan(0, 0, tempImg.bitmap.width, tempImg.bitmap.height, function (x, y, idx) {
+            const alpha = this.bitmap.data[idx + 3];
+            const red = this.bitmap.data[idx];
+            const green = this.bitmap.data[idx + 1];
+            const blue = this.bitmap.data[idx + 2];
+            
+            if (alpha > 0 && red < 128 && green < 128 && blue < 128) {
+                this.bitmap.data[idx] = r;
+                this.bitmap.data[idx + 1] = g;
+                this.bitmap.data[idx + 2] = b;
+            }
+        });
+        
+        img.composite(tempImg, x - padding, y - padding);
+        
+        // Bold effect
+        const boldOffset = 1;
+        const tempImg2 = new Jimp(textWidth + padding * 2, textHeight + padding * 2, 0x00000000);
+        tempImg2.print(font, padding + boldOffset, padding, text);
+        tempImg2.scan(0, 0, tempImg2.bitmap.width, tempImg2.bitmap.height, function (x, y, idx) {
+            const alpha = this.bitmap.data[idx + 3];
+            if (alpha > 0) {
+                this.bitmap.data[idx] = r;
+                this.bitmap.data[idx + 1] = g;
+                this.bitmap.data[idx + 2] = b;
+            }
+        });
+        img.composite(tempImg2, x - padding + boldOffset, y - padding);
+    };
+    
+    // Get invoice dimensions
+    const invoiceWidth = invoice.getWidth();
+    const invoiceHeight = invoice.getHeight();
+    
+    // Get student name from first attendance
+    const namaMurid = attendances[0].nama;
+    
+    // Get current date for invoice
+    const invoiceDate = moment().format('DD/MM/YYYY');
+    
+    // Calculate total price
+    const totalHarga = attendances.reduce((sum, att) => sum + att.harga, 0);
+    
+    // Fill in invoice fields in template
+    printTextWithColor(invoice, fontSmall, 260, 468, invoiceDate);
+    printTextWithColor(invoice, fontSmall, 310, 515, namaMurid);
+    
+    // Photo dimensions
+    const photoWidth = 320;
+    const photoHeight = 320;
+    
+    // Photo positions for 2x2 grid
+    const photoPositions = [
+        { x: 210, y: 735 },   // Absensi 1 (kiri atas)
+        { x: 834, y: 735 },   // Absensi 2 (kanan atas)
+        { x: 210, y: 1187 },  // Absensi 3 (kiri bawah)
+        { x: 834, y: 1187 }   // Absensi 4 (kanan bawah)
+    ];
+    
+    const photoCount = Math.min(attendances.length, 4);
+    
+    // Process photos
+    for (let i = 0; i < photoCount; i++) {
+        const att = attendances[i];
+        const pos = photoPositions[i];
+        
+        try {
+            if (!fs.existsSync(att.foto_path)) {
+                throw new Error(`File not found: ${att.foto_path}`);
+            }
+            const photo = await Jimp.read(att.foto_path);
+            photo.resize(photoWidth, photoHeight, Jimp.RESIZE_BILINEAR);
+            
+            invoice.composite(photo, pos.x, pos.y);
+            
+            const textY = pos.y + photoHeight + 15;
+            const dateStr = moment(att.tanggal).format('DD/MM/YYYY');
+            
+            printTextWithColor(invoice, fontSmall, pos.x, textY, `Tanggal: ${dateStr}`);
+            printTextWithColor(invoice, fontSmall, pos.x, textY + 20, att.deskripsi.substring(0, 25));
+            printTextWithColor(invoice, fontSmall, pos.x, textY + 40, `Rp ${att.harga.toLocaleString('id-ID')}`);
+        } catch (err) {
+            console.error(`Error loading photo ${att.foto_path}:`, err);
+            invoice.print(fontSmall, pos.x, pos.y, `Foto tidak ditemukan`);
+        }
+    }
+    
+    // Print total price
+    printTextWithColor(invoice, fontMedium, 600, 1623, `Rp ${totalHarga.toLocaleString('id-ID')}`);
+    
+    return await invoice.getBufferAsync(Jimp.MIME_PNG);
+}
+
+
+===============================================================
+3. HANDLER ABSENSI (INPUT DATA)
+===============================================================
+
+Tambahkan di arap.js sebelum switch(command) statement:
+
+// ========== ATTENDANCE SYSTEM HANDLER ==========
+// Handle photo with caption for attendance
+// Format: absen NamaMurid Harga Tanggal(DD/MM/YYYY) DeskripsiKelas
+// Example: absen Andi 100000 02/11/2025 Kelas Gitar Dasar
+if (m.mtype === 'imageMessage' && body && body.trim()) {
+    try {
+        const captionLower = body.trim().toLowerCase();
+        
+        if (!captionLower.startsWith('absen')) {
+            return; // Exit if not attendance trigger
+        }
+        
+        const captionWithoutTrigger = body.trim().replace(/^absen\s+/i, '').trim();
+        if (!captionWithoutTrigger) {
+            return await reply('⚠️ Format caption salah! Setelah *absen* harus diikuti data.\n\nFormat: *absen* NamaMurid Harga Tanggal(DD/MM/YYYY) DeskripsiKelas\nContoh: *absen* Andi 100000 02/11/2025 Kelas Gitar Dasar');
+        }
+        const captionParts = captionWithoutTrigger.split(/\s+/);
+        
+        if (captionParts.length >= 4) {
+            const nama = captionParts[0];
+            const hargaStr = captionParts[1];
+            const tanggalStr = captionParts[2];
+            const deskripsi = captionParts.slice(3).join(' ');
+            
+            const harga = parseInt(hargaStr.replace(/[^0-9]/g, ''));
+            if (isNaN(harga) || harga <= 0) {
+                return await reply('⚠️ Format caption salah! Harga harus berupa angka.\n\nFormat: *absen* NamaMurid Harga Tanggal(DD/MM/YYYY) DeskripsiKelas\nContoh: *absen* Andi 100000 02/11/2025 Kelas Gitar Dasar');
+            }
+            
+            const tanggalMatch = tanggalStr.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+            if (!tanggalMatch) {
+                return await reply('⚠️ Format tanggal salah! Gunakan format DD/MM/YYYY.\n\nFormat: *absen* NamaMurid Harga Tanggal(DD/MM/YYYY) DeskripsiKelas\nContoh: *absen* Andi 100000 02/11/2025 Kelas Gitar Dasar');
+            }
+            
+            const [, day, month, year] = tanggalMatch;
+            const tanggal = moment(`${year}-${month}-${day}`, 'YYYY-MM-DD');
+            if (!tanggal.isValid()) {
+                return await reply('⚠️ Tanggal tidak valid!');
+            }
+            
+            const imageMsg = m.msg || m.message?.imageMessage;
+            if (!imageMsg) {
+                return await reply('⚠️ Pesan tidak mengandung foto yang valid.');
+            }
+            
+            // Download photo with retry mechanism
+            let photoBuffer;
+            let retryCount = 0;
+            const maxRetries = 5;
+            
+            while (retryCount < maxRetries) {
+                try {
+                    if (retryCount > 0) {
+                        await sleep(2000 * retryCount);
+                    }
+                    
+                    const currentImageMsg = retryCount > 0 ? (m.msg || m.message?.imageMessage) : imageMsg;
+                    if (!currentImageMsg?.mediaKey && !currentImageMsg?.url) {
+                        throw new Error('Media key or URL not available');
+                    }
+                    
+                    const mime = currentImageMsg.mimetype || 'image/jpeg';
+                    const messageType = mime.split('/')[0];
+                    const stream = await downloadContentFromMessage(currentImageMsg, messageType);
+                    photoBuffer = Buffer.from([]);
+                    
+                    for await (const chunk of stream) {
+                        photoBuffer = Buffer.concat([photoBuffer, chunk]);
+                    }
+                    
+                    if (!photoBuffer || photoBuffer.length === 0) {
+                        throw new Error('Photo buffer is empty');
+                    }
+                    
+                    break;
+                } catch (err) {
+                    retryCount++;
+                    if (retryCount >= maxRetries) {
+                        return await reply(`⚠️ Gagal mendownload foto setelah ${maxRetries} percobaan.`);
+                    }
+                }
+            }
+            
+            const fotoFileName = `${nama.toLowerCase().replace(/\s+/g, '_')}_${day}-${month}-${year}.jpg`;
+            const fotoPath = `./absen/${fotoFileName}`;
+            fs.writeFileSync(fotoPath, photoBuffer);
+            
+            // Save to MongoDB
+            const attendance = new Attendance({
+                nama: nama,
+                harga: harga,
+                tanggal: tanggal.toDate(),
+                deskripsi: deskripsi,
+                foto_path: fotoPath,
+                createdAt: new Date()
+            });
+            await attendance.save();
+            
+            const tanggalFormatted = moment(tanggal).format('DD/MM/YYYY');
+            
+            // Check if this student now has 4 or more uninvoiced entries
+            const uninvoicedAttendances = await Attendance.find({ 
+                nama: nama,
+                isInvoiced: false
+            }).sort({ createdAt: 1 });
+            
+            if (uninvoicedAttendances.length >= 4) {
+                try {
+                    const first4Attendances = uninvoicedAttendances.slice(0, 4);
+                    const invoiceBuffer = await generateAttendanceInvoice(first4Attendances);
+                    const invoiceFileName = `invoice_${nama.toLowerCase().replace(/\s+/g, '_')}_${moment().format('DD-MM-YYYY')}.png`;
+                    const invoicePath = `./invoice/${invoiceFileName}`;
+                    fs.writeFileSync(invoicePath, invoiceBuffer);
+                    
+                    // Mark these 4 attendances as invoiced
+                    const attendanceIds = first4Attendances.map(att => att._id);
+                    await Attendance.updateMany(
+                        { _id: { $in: attendanceIds } },
+                        { $set: { isInvoiced: true } }
+                    );
+                    
+                    await arap.sendMessage(m.chat, {
+                        image: invoiceBuffer,
+                        caption: `📄 Invoice untuk ${nama} telah dibuat secara otomatis.`
+                    }, { quoted: m });
+                } catch (invoiceErr) {
+                    console.error('Error generating invoice:', invoiceErr);
+                    await reply(`✅ Data untuk ${nama} pada ${tanggalFormatted} telah disimpan.\n⚠️ Gagal membuat invoice: ${invoiceErr.message}`);
+                }
+            } else {
+                await reply(`✅ Data untuk ${nama} pada ${tanggalFormatted} telah disimpan.`);
+            }
+        } else {
+            return await reply('⚠️ Format caption salah!\n\nFormat: *absen* NamaMurid Harga Tanggal(DD/MM/YYYY) DeskripsiKelas\nContoh: *absen* Andi 100000 02/11/2025 Kelas Gitar Dasar');
+        }
+    } catch (err) {
+        console.error('Error processing attendance:', err);
+        await reply(`⚠️ Terjadi kesalahan: ${err.message}`);
+    }
+    return; // Exit early to prevent command processing
+}
+// ========== END ATTENDANCE SYSTEM HANDLER ==========
+
+
+===============================================================
+4. COMMAND INVOICE MANUAL
+===============================================================
+
+Tambahkan di dalam switch(command) setelah case 'mbayar':
+
+case 'invoice': {
+    try {
+        // Get nama from args
+        if (!text || !text.trim()) {
+            return await reply('⚠️ Format command salah!\n\nFormat: *Invoice* [NamaMurid]\nContoh: *Invoice* Budi');
+        }
+        
+        const nama = text.trim();
+        
+        // Find all attendances for this student that haven't been invoiced yet
+        const allStudentAttendances = await Attendance.find({ 
+            nama: { $regex: new RegExp(`^${nama}$`, 'i') },
+            isInvoiced: false
+        }).sort({ createdAt: 1 });
+        
+        if (allStudentAttendances.length === 0) {
+            return await reply(`⚠️ Tidak ditemukan data absen yang belum masuk invoice untuk *${nama}*.\n\nSemua absen sudah masuk invoice sebelumnya.`);
+        }
+        
+        const actualNama = allStudentAttendances[0].nama;
+        const totalHarga = allStudentAttendances.reduce((sum, att) => sum + att.harga, 0);
+        const jumlahAbsen = allStudentAttendances.length;
+        
+        try {
+            const invoiceBuffer = await generateAttendanceInvoice(allStudentAttendances);
+            const invoiceFileName = `invoice_${actualNama.toLowerCase().replace(/\s+/g, '_')}_${moment().format('DD-MM-YYYY')}.png`;
+            const invoicePath = `./invoice/${invoiceFileName}`;
+            fs.writeFileSync(invoicePath, invoiceBuffer);
+            
+            // Mark all used attendances as invoiced
+            const attendanceIds = allStudentAttendances.map(att => att._id);
+            await Attendance.updateMany(
+                { _id: { $in: attendanceIds } },
+                { $set: { isInvoiced: true } }
+            );
+            
+            await arap.sendMessage(m.chat, {
+                image: invoiceBuffer,
+                caption: `📄 Invoice untuk *${actualNama}* (${jumlahAbsen} absen)\n\nTotal: Rp ${totalHarga.toLocaleString('id-ID')}`
+            }, { quoted: m });
+        } catch (invoiceErr) {
+            console.error('Error generating invoice:', invoiceErr);
+            return await reply(`⚠️ Gagal membuat invoice untuk *${actualNama}*: ${invoiceErr.message}`);
+        }
+    } catch (err) {
+        console.error('Error processing invoice command:', err);
+        return await reply(`⚠️ Terjadi kesalahan: ${err.message}`);
+    }
+}
+break
+
+
+===============================================================
+5. PACKAGE DEPENDENCIES
+===============================================================
+
+Pastikan package.json memiliki dependencies berikut:
+
+"dependencies": {
+    "jimp": "^0.16.1",
+    "moment-timezone": "^0.5.34",
+    "mongoose": "^8.4.1",
+    "@whiskeysockets/baileys": "npm:@rexxhayanasi/elaina-bail",
+    ...
+}
+
+Import yang diperlukan di arap.js:
+- const Jimp = require('jimp');
+- const moment = require('moment-timezone');
+- const mongoose = require('mongoose');
+- const { downloadContentFromMessage } = require("@whiskeysockets/baileys");
+
+
+===============================================================
+6. STRUKTUR FOLDER
+===============================================================
+
+Pastikan folder berikut ada:
+- ./absen/          (untuk menyimpan foto absensi)
+- ./invoice/        (untuk menyimpan invoice yang dihasilkan)
+- ./images/         (untuk template invoice: invoice.png)
+
+
+===============================================================
+7. CARA PENGGUNAAN
+===============================================================
+
+1. INPUT ABSENSI:
+   - Kirim foto dengan caption: "absen Budi 150000 10/11/2025 Kelas Piano Dasar"
+   - Bot akan menyimpan foto dan data ke database
+   - Jika sudah 4 absen yang belum di-invoice, otomatis buat invoice
+
+2. BUAT INVOICE MANUAL:
+   - Ketik command: "Invoice Budi"
+   - Bot akan membuat invoice dari semua absen yang belum di-invoice
+   - Setelah invoice dibuat, absen tersebut di-mark sebagai sudah di-invoice
+
+3. TRACKING:
+   - Setiap absen memiliki field `isInvoiced` untuk tracking
+   - Absen yang sudah masuk invoice tidak akan masuk lagi di invoice berikutnya
+
+
+===============================================================
+8. KOORDINAT TEMPLATE INVOICE
+===============================================================
+
+Elemen                    Koordinat (x, y)    Keterangan
+Date field               (260, 468)          Setelah "Date :"
+For field                (310, 515)          Setelah "For :"
+Absensi 1 (kiri atas)    (210, 735)          
+Absensi 2 (kanan atas)   (834, 735)          
+Absensi 3 (kiri bawah)   (210, 1187)         
+Absensi 4 (kanan bawah)  (834, 1187)         
+Total Payment            (600, 1623)          Total harga
+
+
+===============================================================
+9. SETTING FONT & WARNA
+===============================================================
+
+- Warna teks: #70370d (rgb(112, 55, 13))
+- Font: Default Jimp (SANS_32, SANS_64, SANS_128)
+- Style: Bold (duplicate dengan offset)
+- Background: Tidak ada (transparent)
+
+
+===============================================================
+SELESAI - Copy semua kode di atas ke proyek baru Anda!
+===============================================================
