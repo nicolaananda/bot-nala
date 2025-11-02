@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Sistem Absensi - Advanced</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="header-left">
+                    <h1><i class="fas fa-clipboard-list"></i> Dashboard Sistem Absensi</h1>
+                    <p class="subtitle">Sistem Manajemen Absensi & Invoice Terintegrasi</p>
+                </div>
+                <div class="header-actions">
+                    <button class="btn btn-success" onclick="exportData('json')" title="Export JSON">
+                        <i class="fas fa-download"></i> Export JSON
+                    </button>
+                    <button class="btn btn-success" onclick="exportData('csv')" title="Export CSV">
+                        <i class="fas fa-file-csv"></i> Export CSV
+                    </button>
+                    <button class="btn btn-primary" onclick="refreshData()">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+            </div>
+            <div class="header-meta">
+                <span class="last-update" id="lastUpdate"></span>
+            </div>
+        </header>
+
+        <!-- Statistics Cards -->
+        <div class="stats-grid" id="statsGrid">
+            <div class="stat-card stat-primary">
+                <div class="stat-icon"><i class="fas fa-users"></i></div>
+                <div class="stat-content">
+                    <h3 id="totalStudents">-</h3>
+                    <p>Total Siswa</p>
+                </div>
+                <div class="stat-trend" id="studentsTrend">
+                    <i class="fas fa-arrow-up"></i>
+                </div>
+            </div>
+            <div class="stat-card stat-info">
+                <div class="stat-icon"><i class="fas fa-check-circle"></i></div>
+                <div class="stat-content">
+                    <h3 id="totalAttendances">-</h3>
+                    <p>Total Absensi</p>
+                </div>
+                <div class="stat-trend" id="attendancesTrend">
+                    <i class="fas fa-arrow-up"></i>
+                </div>
+            </div>
+            <div class="stat-card stat-success">
+                <div class="stat-icon"><i class="fas fa-money-bill-wave"></i></div>
+                <div class="stat-content">
+                    <h3 id="totalRevenue">-</h3>
+                    <p>Total Pendapatan</p>
+                </div>
+                <div class="stat-trend" id="revenueTrend">
+                    <i class="fas fa-arrow-up"></i>
+                </div>
+            </div>
+            <div class="stat-card stat-warning">
+                <div class="stat-icon"><i class="fas fa-file-invoice"></i></div>
+                <div class="stat-content">
+                    <h3 id="invoicedCount">-</h3>
+                    <p>Sudah Di-Invoice</p>
+                </div>
+                <div class="stat-trend" id="invoicedTrend">
+                    <i class="fas fa-check"></i>
+                </div>
+            </div>
+            <div class="stat-card stat-danger">
+                <div class="stat-icon"><i class="fas fa-clock"></i></div>
+                <div class="stat-content">
+                    <h3 id="uninvoicedCount">-</h3>
+                    <p>Belum Di-Invoice</p>
+                </div>
+                <div class="stat-trend" id="uninvoicedTrend">
+                    <i class="fas fa-exclamation"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="quick-actions">
+            <button class="action-btn" onclick="showGenerateInvoiceModal()">
+                <i class="fas fa-file-invoice-dollar"></i>
+                <span>Generate Invoice</span>
+            </button>
+            <button class="action-btn" onclick="showBulkInvoiceModal()">
+                <i class="fas fa-bolt"></i>
+                <span>Bulk Invoice</span>
+            </button>
+            <button class="action-btn" onclick="showTab('charts')">
+                <i class="fas fa-chart-bar"></i>
+                <span>View Analytics</span>
+            </button>
+        </div>
+
+        <!-- Filters -->
+        <div class="filters">
+            <div class="filter-group">
+                <label><i class="fas fa-user"></i> Nama Siswa</label>
+                <input type="text" id="namaFilter" placeholder="Cari nama siswa..." onkeyup="applyFilters()">
+            </div>
+            <div class="filter-group">
+                <label><i class="fas fa-calendar-alt"></i> Dari Tanggal</label>
+                <input type="date" id="dateFrom" onchange="applyFilters()">
+            </div>
+            <div class="filter-group">
+                <label><i class="fas fa-calendar-alt"></i> Sampai Tanggal</label>
+                <input type="date" id="dateTo" onchange="applyFilters()">
+            </div>
+            <div class="filter-group">
+                <label><i class="fas fa-filter"></i> Status Invoice</label>
+                <select id="invoiceStatusFilter" onchange="applyFilters()">
+                    <option value="">Semua</option>
+                    <option value="true">Sudah Invoice</option>
+                    <option value="false">Belum Invoice</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <button class="btn btn-secondary" onclick="clearFilters()">
+                    <i class="fas fa-times"></i> Clear
+                </button>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab-btn active" onclick="showTab('attendances')">
+                <i class="fas fa-list"></i> Daftar Absensi
+                <span class="tab-badge" id="attendancesBadge">0</span>
+            </button>
+            <button class="tab-btn" onclick="showTab('students')">
+                <i class="fas fa-user-friends"></i> Daftar Siswa
+                <span class="tab-badge" id="studentsBadge">0</span>
+            </button>
+            <button class="tab-btn" onclick="showTab('charts')">
+                <i class="fas fa-chart-line"></i> Analytics
+            </button>
+        </div>
+
+        <!-- Tab Content: Attendances -->
+        <div id="attendancesTab" class="tab-content active">
+            <div class="table-actions">
+                <div class="table-actions-left">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
+                        <span>Select All</span>
+                    </label>
+                    <button class="btn btn-sm btn-danger" onclick="bulkGenerateInvoice()" id="bulkInvoiceBtn" disabled>
+                        <i class="fas fa-file-invoice"></i> Generate Invoice Selected
+                    </button>
+                    <span class="selected-count" id="selectedCount">0 selected</span>
+                </div>
+                <div class="table-actions-right">
+                    <input type="text" class="search-box" id="tableSearch" placeholder="Quick search..." onkeyup="quickSearch()">
+                </div>
+            </div>
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th width="40"><input type="checkbox" id="selectAllHeader" onchange="toggleSelectAll()"></th>
+                            <th>Foto</th>
+                            <th>Nama Siswa</th>
+                            <th>Tanggal</th>
+                            <th>Deskripsi</th>
+                            <th>Harga</th>
+                            <th>Invoice</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="attendancesTableBody">
+                        <tr>
+                            <td colspan="8" class="loading">Memuat data...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="pagination" id="pagination"></div>
+        </div>
+
+        <!-- Tab Content: Students -->
+        <div id="studentsTab" class="tab-content">
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Nama Siswa</th>
+                            <th>Total Absensi</th>
+                            <th>Sudah Invoice</th>
+                            <th>Belum Invoice</th>
+                            <th>Total Harga</th>
+                            <th>Absensi Terakhir</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="studentsTableBody">
+                        <tr>
+                            <td colspan="7" class="loading">Memuat data...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Tab Content: Charts -->
+        <div id="chartsTab" class="tab-content">
+            <div class="charts-grid">
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h3>Pendapatan per Bulan (6 Bulan Terakhir)</h3>
+                        <div class="chart-controls">
+                            <select id="chartPeriod" onchange="updateCharts()">
+                                <option value="6">6 Bulan</option>
+                                <option value="12">12 Bulan</option>
+                            </select>
+                        </div>
+                    </div>
+                    <canvas id="revenueChart"></canvas>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h3>Top 10 Siswa (Berdasarkan Jumlah Absensi)</h3>
+                    </div>
+                    <canvas id="topStudentsChart"></canvas>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h3>Pendapatan per Siswa</h3>
+                    </div>
+                    <canvas id="revenueByStudentChart"></canvas>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h3>Status Invoice</h3>
+                    </div>
+                    <canvas id="invoiceStatusChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal for Image -->
+        <div id="imageModal" class="modal">
+            <span class="modal-close" onclick="closeModal()">&times;</span>
+            <img class="modal-content" id="modalImage">
+            <div class="modal-info" id="modalInfo"></div>
+        </div>
+
+        <!-- Generate Invoice Modal -->
+        <div id="generateInvoiceModal" class="modal">
+            <div class="modal-dialog">
+                <div class="modal-header">
+                    <h2><i class="fas fa-file-invoice-dollar"></i> Generate Invoice</h2>
+                    <span class="modal-close" onclick="closeGenerateInvoiceModal()">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label><i class="fas fa-user"></i> Pilih Siswa</label>
+                        <select id="invoiceStudentSelect" onchange="loadUninvoicedAttendances()">
+                            <option value="">-- Pilih Siswa --</option>
+                        </select>
+                    </div>
+                    <div id="uninvoicedAttendancesList" class="attendances-list"></div>
+                    <div id="invoicePreview" class="invoice-preview"></div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeGenerateInvoiceModal()">Batal</button>
+                    <button class="btn btn-primary" onclick="generateInvoiceFromModal()" id="generateInvoiceBtn">
+                        <i class="fas fa-file-invoice"></i> Generate Invoice
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Invoice Preview Modal -->
+        <div id="invoicePreviewModal" class="modal">
+            <div class="modal-dialog modal-large">
+                <div class="modal-header">
+                    <h2><i class="fas fa-file-invoice"></i> Invoice Preview</h2>
+                    <span class="modal-close" onclick="closeInvoicePreviewModal()">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <div id="invoicePreviewContent"></div>
+                    <div class="invoice-actions">
+                        <button class="btn btn-success" onclick="downloadInvoice()">
+                            <i class="fas fa-download"></i> Download Invoice
+                        </button>
+                        <button class="btn btn-secondary" onclick="closeInvoicePreviewModal()">Tutup</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Toast Notification -->
+        <div id="toast" class="toast">
+            <div class="toast-content">
+                <i class="toast-icon"></i>
+                <span class="toast-message"></span>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

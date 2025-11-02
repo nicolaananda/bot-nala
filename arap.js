@@ -217,7 +217,7 @@ async function generateAttendanceInvoice(attendances) {
     }
     
     // Print total price at exact position (above "Total Payment" text - moved down by 40px)
-    printTextWithColor(invoice, fontSmall, 600, 1623, `Rp ${totalHarga.toLocaleString('id-ID')}`);
+    printTextWithColor(invoice, fontSmall, 587, 1776, `Rp ${totalHarga.toLocaleString('id-ID')}`);
     
     return await invoice.getBufferAsync(Jimp.MIME_PNG);
 }
