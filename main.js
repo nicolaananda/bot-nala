@@ -87,6 +87,24 @@ const path = require('path')
 
 const store = { }
 
+// MongoDB Connection - Connect before bot starts
+const mongoose = require('mongoose');
+const mongoUri = global.mongodblink;
+async function connectMongoDB() {
+    if (mongoUri) {
+        try {
+            await mongoose.connect(mongoUri, {});
+            console.log(chalk.green('✅ Terhubung ke MongoDB!'));
+        } catch (err) {
+            console.error(chalk.red('❌ Gagal terhubung ke MongoDB:', err));
+            process.exit(1);
+        }
+    } else {
+        console.error(chalk.red('❌ global.mongodblink belum didefinisikan di settings.js.'));
+        process.exit(1);
+    }
+}
+
 const readline = require("readline");
 const usePairingCode = true
 const question = (text) => {
@@ -402,5 +420,10 @@ arap.sendTextWithMentions = async (jid, text, quoted, options = {}) => arap.send
     return arap
 }
 
-
-Botstarted()
+// Connect to MongoDB first, then start bot
+connectMongoDB().then(() => {
+    Botstarted()
+}).catch(err => {
+    console.error(chalk.red('❌ Gagal memulai bot:', err));
+    process.exit(1);
+})

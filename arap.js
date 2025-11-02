@@ -276,17 +276,7 @@ const {
     updatePay
 } = require("./lib/store")
 
-
-const mongoUri = global.mongodblink;
-if (mongoUri) {
-    mongoose.connect(mongoUri, {}).then(() => {
-        console.log(chalk.green('✅ Terhubung ke MongoDB!'));
-    }).catch(err => {
-        console.error(chalk.red('❌ Gagal terhubung ke MongoDB:', err));
-    });
-} else {
-    console.error(chalk.red('❌ global.mongodblink belum didefinisikan di settings.js.'));
-}
+// MongoDB connection is now handled in main.js before bot starts
 
 async function getGroupAdmins(participants){
         let admins = []
@@ -1598,6 +1588,77 @@ case 'invoice': {
         }
     } catch (err) {
         console.error('Error processing invoice command:', err);
+        return await reply(`⚠️ Terjadi kesalahan: ${err.message}`);
+    }
+}
+break
+
+case 'cekmurid': case 'ceksiswa': case 'cekabsen': {
+    try {
+        // Get nama from args
+        if (!text || !text.trim()) {
+            return await reply('⚠️ Format command salah!\n\nFormat: *CekMurid* [NamaMurid]\nContoh: *CekMurid* Budi');
+        }
+        
+        const nama = text.trim();
+        
+        // Find all attendances for this student (case-insensitive search)
+        const allAttendances = await Attendance.find({ 
+            nama: { $regex: new RegExp(`^${nama}$`, 'i') }
+        }).sort({ createdAt: 1 }); // Sort ascending (oldest first)
+        
+        if (allAttendances.length === 0) {
+            return await reply(`⚠️ Tidak ditemukan data absen untuk *${nama}*.\n\nPastikan nama murid sudah benar.`);
+        }
+        
+        const actualNama = allAttendances[0].nama;
+        
+        // Separate invoiced and uninvoiced
+        const invoicedAttendances = allAttendances.filter(att => att.isInvoiced === true);
+        const uninvoicedAttendances = allAttendances.filter(att => att.isInvoiced === false);
+        
+        // Calculate totals
+        const totalSemua = allAttendances.reduce((sum, att) => sum + att.harga, 0);
+        const totalSudahInvoice = invoicedAttendances.reduce((sum, att) => sum + att.harga, 0);
+        const totalBelumInvoice = uninvoicedAttendances.reduce((sum, att) => sum + att.harga, 0);
+        
+        // Build detail message
+        let detailMessage = `📊 *Data Absensi: ${actualNama}*\n\n`;
+        detailMessage += `━━━━━━━━━━━━━━━━━━━━\n`;
+        detailMessage += `📝 *Ringkasan:*\n`;
+        detailMessage += `• Total Absen: ${allAttendances.length}\n`;
+        detailMessage += `• Sudah Invoice: ${invoicedAttendances.length}\n`;
+        detailMessage += `• Belum Invoice: ${uninvoicedAttendances.length}\n`;
+        detailMessage += `\n💰 *Total Harga:*\n`;
+        detailMessage += `• Semua: Rp ${totalSemua.toLocaleString('id-ID')}\n`;
+        detailMessage += `• Sudah Invoice: Rp ${totalSudahInvoice.toLocaleString('id-ID')}\n`;
+        detailMessage += `• Belum Invoice: Rp ${totalBelumInvoice.toLocaleString('id-ID')}\n`;
+        
+        if (uninvoicedAttendances.length > 0) {
+            detailMessage += `\n━━━━━━━━━━━━━━━━━━━━\n`;
+            detailMessage += `📋 *Absen Belum Invoice:*\n`;
+            uninvoicedAttendances.forEach((att, index) => {
+                const dateStr = moment(att.tanggal).format('DD/MM/YYYY');
+                detailMessage += `\n${index + 1}. ${dateStr}\n`;
+                detailMessage += `   • Kelas: ${att.deskripsi}\n`;
+                detailMessage += `   • Harga: Rp ${att.harga.toLocaleString('id-ID')}\n`;
+            });
+        }
+        
+        if (invoicedAttendances.length > 0) {
+            detailMessage += `\n━━━━━━━━━━━━━━━━━━━━\n`;
+            detailMessage += `✅ *Absen Sudah Invoice:*\n`;
+            invoicedAttendances.forEach((att, index) => {
+                const dateStr = moment(att.tanggal).format('DD/MM/YYYY');
+                detailMessage += `\n${index + 1}. ${dateStr}\n`;
+                detailMessage += `   • Kelas: ${att.deskripsi}\n`;
+                detailMessage += `   • Harga: Rp ${att.harga.toLocaleString('id-ID')}\n`;
+            });
+        }
+        
+        await reply(detailMessage);
+    } catch (err) {
+        console.error('Error processing cekmurid command:', err);
         return await reply(`⚠️ Terjadi kesalahan: ${err.message}`);
     }
 }
