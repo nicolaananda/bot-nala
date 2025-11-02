@@ -1523,11 +1523,30 @@ function Styles(text, style = 1) {
                             { $set: { isInvoiced: true } }
                         );
                         
-                        // Send invoice to admin
+                        // Send invoice to admin (from buffer, before deleting local file)
                         await arap.sendMessage(m.chat, {
                             image: invoiceBuffer,
                             caption: `📄 Invoice untuk ${nama} telah dibuat secara otomatis.`
                         }, { quoted: m });
+                        
+                        // Try to upload to R2
+                        try {
+                            const r2InvoicePath = `invoice/${invoiceFileName}`;
+                            const r2Url = await uploadToR2(invoiceBuffer, r2InvoicePath, 'image/png');
+                            console.log(`✅ Invoice uploaded to R2: ${r2Url}`);
+                            
+                            // Delete local file after successful R2 upload
+                            try {
+                                if (fs.existsSync(invoicePath)) {
+                                    fs.unlinkSync(invoicePath);
+                                    console.log(`✅ Local invoice file deleted: ${invoiceFileName}`);
+                                }
+                            } catch (deleteErr) {
+                                console.warn('⚠️ Failed to delete local invoice file:', deleteErr.message);
+                            }
+                        } catch (r2Error) {
+                            console.warn('⚠️ R2 upload failed for invoice, keeping local only:', r2Error.message);
+                        }
                     } catch (invoiceErr) {
                         console.error('Error generating invoice:', invoiceErr);
                         await reply(`✅ Data untuk ${nama} pada ${tanggalFormatted} telah disimpan.\n\n🆔 ID: *${attendance._id.toString()}*\n\n⚠️ Gagal membuat invoice: ${invoiceErr.message}\n\n💡 Gunakan command *HapusAbsen ${attendance._id.toString()}* untuk menghapus data.`);
@@ -1605,6 +1624,15 @@ case 'invoice': {
             const invoiceFileName = `invoice_${actualNama.toLowerCase().replace(/\s+/g, '_')}_${moment().format('DD-MM-YYYY')}.png`;
             const invoicePath = `./invoice/${invoiceFileName}`;
             fs.writeFileSync(invoicePath, invoiceBuffer);
+            
+            // Try to upload to R2
+            try {
+                const r2InvoicePath = `invoice/${invoiceFileName}`;
+                const r2Url = await uploadToR2(invoiceBuffer, r2InvoicePath, 'image/png');
+                console.log(`✅ Invoice uploaded to R2: ${r2Url}`);
+            } catch (r2Error) {
+                console.warn('⚠️ R2 upload failed for invoice, keeping local only:', r2Error.message);
+            }
             
             // Mark all used attendances as invoiced
             const attendanceIds = allStudentAttendances.map(att => att._id);
