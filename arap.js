@@ -206,9 +206,9 @@ async function generateAttendanceInvoice(attendances) {
             // Adjust spacing untuk font yang lebih besar
             const lineSpacing = 35; // Spacing lebih besar karena font lebih besar
             
-            printTextWithColor(invoice, fontCaption, pos.x, textY, `Tanggal: ${dateStr}`);
-            printTextWithColor(invoice, fontCaption, pos.x, textY + lineSpacing, att.deskripsi.substring(0, 25)); // Limit description length
-            printTextWithColor(invoice, fontCaption, pos.x, textY + (lineSpacing * 2), `Rp ${att.harga.toLocaleString('id-ID')}`);
+            printTextWithColor(invoice, fontSmall, pos.x, textY, `${dateStr}`);
+            printTextWithColor(invoice, fontSmall, pos.x, textY + lineSpacing, att.deskripsi.substring(0, 25)); // Limit description length
+            printTextWithColor(invoice, fontMedium, pos.x, textY + (lineSpacing * 2), `Rp ${att.harga.toLocaleString('id-ID')}`);
         } catch (err) {
             console.error(`Error loading photo ${att.foto_path}:`, err);
             // Print error message if photo can't be loaded
@@ -217,7 +217,7 @@ async function generateAttendanceInvoice(attendances) {
     }
     
     // Print total price at exact position (above "Total Payment" text - moved down by 40px)
-    printTextWithColor(invoice, fontMedium, 600, 1623, `Rp ${totalHarga.toLocaleString('id-ID')}`);
+    printTextWithColor(invoice, fontSmall, 600, 1623, `Rp ${totalHarga.toLocaleString('id-ID')}`);
     
     return await invoice.getBufferAsync(Jimp.MIME_PNG);
 }
