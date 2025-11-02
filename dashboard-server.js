@@ -6,6 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const chalk = require('chalk');
 const Jimp = require('jimp');
+const { downloadFromR2, deleteFromR2, getR2PublicUrl } = require('./lib/r2');
 
 const app = express();
 const PORT = process.env.DASHBOARD_PORT || 3001;
@@ -118,10 +119,34 @@ async function generateAttendanceInvoice(attendances) {
         const pos = photoPositions[i];
         
         try {
-            if (!fs.existsSync(att.foto_path)) {
-                throw new Error(`File not found: ${att.foto_path}`);
+            // Load photo from R2 or local file
+            let photoBuffer;
+            if (att.foto_path.startsWith('http') || att.foto_path.startsWith('absen/')) {
+                // Photo is in R2
+                try {
+                    const key = att.foto_path.includes('/') && !att.foto_path.startsWith('./')
+                        ? att.foto_path.split('/').slice(-2).join('/') // Keep 'absen/filename.jpg'
+                        : `absen/${att.foto_path.replace('./absen/', '').replace('absen/', '')}`;
+                    photoBuffer = await downloadFromR2(key);
+                    console.log(`✅ Foto downloaded from R2: ${key}`);
+                } catch (r2Error) {
+                    console.error('Error downloading from R2, trying local:', r2Error);
+                    // Fallback to local file
+                    if (fs.existsSync(att.foto_path)) {
+                        photoBuffer = await fs.promises.readFile(att.foto_path);
+                    } else {
+                        throw new Error(`File not found: ${att.foto_path}`);
+                    }
+                }
+            } else {
+                // Photo is local file
+                if (!fs.existsSync(att.foto_path)) {
+                    throw new Error(`File not found: ${att.foto_path}`);
+                }
+                photoBuffer = await fs.promises.readFile(att.foto_path);
             }
-            const photo = await Jimp.read(att.foto_path);
+            
+            const photo = await Jimp.read(photoBuffer);
             photo.resize(photoWidth, photoHeight, Jimp.RESIZE_BILINEAR);
             invoice.composite(photo, pos.x, pos.y);
             
@@ -138,7 +163,8 @@ async function generateAttendanceInvoice(attendances) {
         }
     }
     
-    printTextWithColor(invoice, fontSmall, 600, 1623, `Rp ${totalHarga.toLocaleString('id-ID')}`);
+    // Print total price at exact position (above "Total Payment" text - moved down by 40px)
+    printTextWithColor(invoice, fontSmall, 587, 1776, `Rp ${totalHarga.toLocaleString('id-ID')}`, 0xFFFFFF);
     
     return await invoice.getBufferAsync(Jimp.MIME_PNG);
 }
@@ -195,10 +221,33 @@ app.get('/api/attendances', async (req, res) => {
         
         const total = await Attendance.countDocuments(query);
         
-        // Convert to base64 for images
-        const attendancesWithImages = attendances.map(att => {
+        // Convert to base64 for images or use public URL
+        const attendancesWithImages = await Promise.all(attendances.map(async (att) => {
             const result = { ...att };
-            if (fs.existsSync(att.foto_path)) {
+            
+            // Check if photo is in R2 or local
+            if (att.foto_path.startsWith('http')) {
+                // Photo has public URL, use it directly
+                result.foto_base64 = att.foto_path;
+            } else if (att.foto_path.startsWith('absen/')) {
+                // Photo is in R2, get public URL or download
+                try {
+                    const publicUrl = getR2PublicUrl(att.foto_path);
+                    if (publicUrl.startsWith('http')) {
+                        // Public URL available
+                        result.foto_base64 = publicUrl;
+                    } else {
+                        // No public URL, download and convert to base64
+                        const imageBuffer = await downloadFromR2(att.foto_path);
+                        const base64Image = imageBuffer.toString('base64');
+                        result.foto_base64 = `data:image/jpeg;base64,${base64Image}`;
+                    }
+                } catch (err) {
+                    console.error(`Error reading R2 image ${att.foto_path}:`, err);
+                    result.foto_base64 = null;
+                }
+            } else if (fs.existsSync(att.foto_path)) {
+                // Photo is local file
                 try {
                     const imageBuffer = fs.readFileSync(att.foto_path);
                     const base64Image = imageBuffer.toString('base64');
@@ -210,8 +259,9 @@ app.get('/api/attendances', async (req, res) => {
             } else {
                 result.foto_base64 = null;
             }
+            
             return result;
-        });
+        }));
         
         res.json({
             success: true,
@@ -356,9 +406,32 @@ app.get('/api/attendances/student/:nama', async (req, res) => {
         .sort({ tanggal: -1 })
         .lean();
         
-        const attendancesWithImages = attendances.map(att => {
+        const attendancesWithImages = await Promise.all(attendances.map(async (att) => {
             const result = { ...att };
-            if (fs.existsSync(att.foto_path)) {
+            
+            // Check if photo is in R2 or local
+            if (att.foto_path.startsWith('http')) {
+                // Photo has public URL, use it directly
+                result.foto_base64 = att.foto_path;
+            } else if (att.foto_path.startsWith('absen/')) {
+                // Photo is in R2, get public URL or download
+                try {
+                    const publicUrl = getR2PublicUrl(att.foto_path);
+                    if (publicUrl.startsWith('http')) {
+                        // Public URL available
+                        result.foto_base64 = publicUrl;
+                    } else {
+                        // No public URL, download and convert to base64
+                        const imageBuffer = await downloadFromR2(att.foto_path);
+                        const base64Image = imageBuffer.toString('base64');
+                        result.foto_base64 = `data:image/jpeg;base64,${base64Image}`;
+                    }
+                } catch (err) {
+                    console.error(`Error reading R2 image ${att.foto_path}:`, err);
+                    result.foto_base64 = null;
+                }
+            } else if (fs.existsSync(att.foto_path)) {
+                // Photo is local file
                 try {
                     const imageBuffer = fs.readFileSync(att.foto_path);
                     const base64Image = imageBuffer.toString('base64');
@@ -369,8 +442,9 @@ app.get('/api/attendances/student/:nama', async (req, res) => {
             } else {
                 result.foto_base64 = null;
             }
+            
             return result;
-        });
+        }));
         
         res.json({
             success: true,
@@ -482,6 +556,63 @@ app.get('/api/invoice/:filename', async (req, res) => {
         res.send(invoiceBuffer);
     } catch (error) {
         console.error('Error fetching invoice:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+});
+
+// Delete attendance by ID
+app.delete('/api/attendances/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        const attendance = await Attendance.findById(id);
+        
+        if (!attendance) {
+            return res.status(404).json({
+                success: false,
+                message: 'Data absensi tidak ditemukan'
+            });
+        }
+        
+        // Get info before delete
+        const namaSiswa = attendance.nama;
+        const tanggalFormatted = moment(attendance.tanggal).format('DD/MM/YYYY');
+        const fotoPath = attendance.foto_path;
+        
+        // Delete from database
+        await Attendance.findByIdAndDelete(id);
+        
+        // Delete photo from R2 or local file
+        if (fotoPath.startsWith('http') || fotoPath.startsWith('absen/')) {
+            // Photo is in R2
+            try {
+                await deleteFromR2(fotoPath);
+            } catch (err) {
+                console.error('Error deleting from R2:', err);
+            }
+        } else if (fs.existsSync(fotoPath)) {
+            // Photo is local file
+            try {
+                fs.unlinkSync(fotoPath);
+            } catch (err) {
+                console.error('Error deleting photo file:', err);
+            }
+        }
+        
+        res.json({
+            success: true,
+            message: 'Data absensi berhasil dihapus',
+            data: {
+                deletedId: id,
+                nama: namaSiswa,
+                tanggal: tanggalFormatted
+            }
+        });
+    } catch (error) {
+        console.error('Error deleting attendance:', error);
         res.status(500).json({
             success: false,
             message: error.message

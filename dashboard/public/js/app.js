@@ -154,9 +154,14 @@ async function loadAttendances(page = 1) {
                     <td>${formatCurrency(att.harga)}</td>
                     <td><span class="badge ${att.isInvoiced ? 'badge-success' : 'badge-warning'}">${att.isInvoiced ? 'Sudah' : 'Belum'}</span></td>
                     <td>
-                        ${!att.isInvoiced ? `<button class="btn btn-sm btn-primary" onclick="generateSingleInvoice('${att.nama}', ['${att._id}'])">
-                            <i class="fas fa-file-invoice"></i> Invoice
-                        </button>` : '<span class="badge badge-success">Done</span>'}
+                        <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                            ${!att.isInvoiced ? `<button class="btn btn-sm btn-primary" onclick="generateSingleInvoice('${att.nama}', ['${att._id}'])">
+                                <i class="fas fa-file-invoice"></i> Invoice
+                            </button>` : '<span class="badge badge-success">Done</span>'}
+                            <button class="btn btn-sm btn-danger" onclick="deleteAttendance('${att._id}', '${att.nama}', '${formatDate(att.tanggal)}')" title="Hapus data">
+                                <i class="fas fa-trash"></i> Hapus
+                            </button>
+                        </div>
                     </td>
                 `;
                 tbody.appendChild(tr);
@@ -496,6 +501,35 @@ function downloadInvoice() {
     link.download = currentInvoiceData.fileName;
     link.click();
     showToast('Invoice berhasil diunduh', 'success');
+}
+
+// Delete attendance
+async function deleteAttendance(id, nama, tanggal) {
+    if (!confirm(`Apakah Anda yakin ingin menghapus data absensi ini?\n\nNama: ${nama}\nTanggal: ${tanggal}\n\nTindakan ini tidak dapat dibatalkan!`)) {
+        return;
+    }
+    
+    try {
+        showToast('Sedang menghapus data...', 'warning');
+        
+        const response = await fetch(`/api/attendances/${id}`, {
+            method: 'DELETE'
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showToast(`Data absensi untuk ${result.data.nama} berhasil dihapus!`, 'success');
+            loadStatistics();
+            loadAttendances(currentPage);
+            loadStudents();
+        } else {
+            showToast(result.message || 'Gagal menghapus data', 'error');
+        }
+    } catch (error) {
+        console.error('Error deleting attendance:', error);
+        showToast('Gagal menghapus data', 'error');
+    }
 }
 
 // Export data
