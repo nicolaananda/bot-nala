@@ -1,0 +1,1283 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bot Absensi & Invoice Generator - Portfolio | Nicola</title>
+    <meta name="description" content="Sistem otomatis berbasis WhatsApp untuk pengelolaan absensi siswa dengan fitur pembuatan invoice otomatis. Menggabungkan WhatsApp Bot, MongoDB, dan Dashboard Web.">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary-color: #6366f1;
+            --secondary-color: #8b5cf6;
+            --accent-color: #ec4899;
+            --dark-bg: #0f172a;
+            --dark-secondary: #1e293b;
+            --text-light: #f8fafc;
+            --text-muted: #94a3b8;
+            --gradient-1: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --gradient-2: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            --gradient-3: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--dark-bg);
+            color: var(--text-light);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        /* Smooth Scroll */
+        html {
+            scroll-behavior: smooth;
+        }
+
+        /* Header */
+        header {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            z-index: 1000;
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+            padding: 1rem 0;
+        }
+
+        nav {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            background: var(--gradient-1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: var(--text-light);
+            text-decoration: none;
+            transition: color 0.3s;
+            font-weight: 500;
+        }
+
+        .nav-links a:hover {
+            color: var(--primary-color);
+        }
+
+        /* Hero Section */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 8rem 2rem 4rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(99, 102, 241, 0.1) 0%, transparent 70%);
+            animation: rotate 20s linear infinite;
+        }
+
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .hero-content {
+            max-width: 900px;
+            z-index: 1;
+            position: relative;
+        }
+
+        .hero-badge {
+            display: inline-block;
+            padding: 0.5rem 1rem;
+            background: rgba(99, 102, 241, 0.2);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-radius: 50px;
+            margin-bottom: 1.5rem;
+            font-size: 0.9rem;
+            color: var(--primary-color);
+        }
+
+        .hero h1 {
+            font-size: clamp(2.5rem, 5vw, 4rem);
+            margin-bottom: 1.5rem;
+            background: var(--gradient-1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            line-height: 1.2;
+        }
+
+        .hero p {
+            font-size: 1.25rem;
+            color: var(--text-muted);
+            margin-bottom: 2rem;
+            line-height: 1.8;
+        }
+
+        .hero-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 0.875rem 2rem;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-primary {
+            background: var(--gradient-1);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(99, 102, 241, 0.3);
+        }
+
+        .btn-secondary {
+            background: rgba(148, 163, 184, 0.1);
+            color: var(--text-light);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(148, 163, 184, 0.2);
+        }
+
+        /* Section Styles */
+        section {
+            padding: 6rem 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 4rem;
+        }
+
+        .section-title {
+            font-size: clamp(2rem, 4vw, 3rem);
+            margin-bottom: 1rem;
+            background: var(--gradient-1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .section-subtitle {
+            font-size: 1.25rem;
+            color: var(--text-muted);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        /* Features Grid */
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-top: 3rem;
+        }
+
+        .feature-card {
+            background: var(--dark-secondary);
+            border: 1px solid rgba(148, 163, 184, 0.1);
+            border-radius: 20px;
+            padding: 2rem;
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .feature-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: var(--gradient-1);
+            transform: scaleX(0);
+            transition: transform 0.3s;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            border-color: rgba(99, 102, 241, 0.3);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .feature-card:hover::before {
+            transform: scaleX(1);
+        }
+
+        .feature-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 15px;
+            background: var(--gradient-1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .feature-card h3 {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .feature-card ul {
+            list-style: none;
+            color: var(--text-muted);
+        }
+
+        .feature-card ul li {
+            padding: 0.5rem 0;
+            padding-left: 1.5rem;
+            position: relative;
+        }
+
+        .feature-card ul li::before {
+            content: '✓';
+            position: absolute;
+            left: 0;
+            color: var(--primary-color);
+            font-weight: bold;
+        }
+
+        /* Tech Stack */
+        .tech-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-top: 3rem;
+        }
+
+        .tech-item {
+            background: var(--dark-secondary);
+            border: 1px solid rgba(148, 163, 184, 0.1);
+            border-radius: 15px;
+            padding: 1.5rem;
+            text-align: center;
+            transition: all 0.3s;
+        }
+
+        .tech-item:hover {
+            transform: translateY(-5px);
+            border-color: var(--primary-color);
+            box-shadow: 0 10px 30px rgba(99, 102, 241, 0.2);
+        }
+
+        .tech-item i {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            background: var(--gradient-1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .tech-item h4 {
+            font-size: 1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .tech-item p {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+        }
+
+        /* Flow Diagram */
+        .flow-diagram {
+            background: var(--dark-secondary);
+            border-radius: 20px;
+            padding: 2rem;
+            margin-top: 3rem;
+            overflow-x: auto;
+        }
+
+        .flow-diagram pre {
+            color: var(--text-light);
+            font-family: 'Courier New', monospace;
+            font-size: 0.875rem;
+            line-height: 1.6;
+            white-space: pre;
+            overflow-x: auto;
+        }
+
+        /* Mermaid Diagram Styles */
+        .mermaid {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            padding: 2rem;
+            margin: 1.5rem 0;
+            border: 1px solid rgba(148, 163, 184, 0.1);
+        }
+
+        /* Visual Flow Boxes */
+        .visual-flow-container {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            align-items: center;
+            margin: 2rem 0;
+        }
+
+        .visual-flow-box {
+            background: var(--dark-secondary);
+            border: 2px solid rgba(99, 102, 241, 0.3);
+            border-radius: 15px;
+            padding: 1.5rem 2rem;
+            min-width: 350px;
+            max-width: 600px;
+            position: relative;
+            transition: all 0.3s;
+            animation: fadeInUp 0.6s ease-out;
+        }
+
+        .visual-flow-box::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 5px;
+            height: 100%;
+            background: var(--gradient-1);
+            border-radius: 15px 0 0 15px;
+        }
+
+        .visual-flow-box:hover {
+            transform: translateY(-5px);
+            border-color: var(--primary-color);
+            box-shadow: 0 10px 30px rgba(99, 102, 241, 0.2);
+        }
+
+        .visual-flow-box.user-action {
+            border-color: rgba(102, 126, 234, 0.5);
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+        }
+
+        .visual-flow-box.process {
+            border-color: rgba(240, 147, 251, 0.5);
+            background: linear-gradient(135deg, rgba(240, 147, 251, 0.1) 0%, rgba(245, 87, 108, 0.1) 100%);
+        }
+
+        .visual-flow-box.validation {
+            border-color: rgba(79, 172, 254, 0.5);
+            background: linear-gradient(135deg, rgba(79, 172, 254, 0.1) 0%, rgba(0, 242, 254, 0.1) 100%);
+        }
+
+        .visual-flow-box.storage {
+            border-color: rgba(67, 233, 123, 0.5);
+            background: linear-gradient(135deg, rgba(67, 233, 123, 0.1) 0%, rgba(56, 249, 215, 0.1) 100%);
+        }
+
+        .visual-flow-box.decision {
+            border-color: rgba(250, 112, 154, 0.5);
+            background: linear-gradient(135deg, rgba(250, 112, 154, 0.1) 0%, rgba(254, 225, 64, 0.1) 100%);
+            border-style: dashed;
+        }
+
+        .visual-flow-box.success {
+            border-color: rgba(48, 207, 208, 0.5);
+            background: linear-gradient(135deg, rgba(48, 207, 208, 0.1) 0%, rgba(51, 8, 103, 0.1) 100%);
+        }
+
+        .visual-flow-arrow {
+            width: 3px;
+            height: 40px;
+            background: var(--gradient-1);
+            margin: 0 auto;
+            position: relative;
+            animation: pulse 1.5s infinite;
+        }
+
+        .visual-flow-arrow::after {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-top: 10px solid var(--primary-color);
+        }
+
+        .visual-flow-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+            color: var(--primary-color);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .visual-flow-description {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+
+        .visual-branch-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 2rem;
+            margin: 2rem 0;
+            width: 100%;
+        }
+
+        .visual-branch-path {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .visual-branch-label {
+            background: var(--gradient-1);
+            padding: 0.5rem 1.5rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: white;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
+        }
+
+        /* Stats */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 2rem;
+            margin-top: 3rem;
+        }
+
+        .stat-card {
+            background: var(--dark-secondary);
+            border-radius: 20px;
+            padding: 2rem;
+            text-align: center;
+            border: 1px solid rgba(148, 163, 184, 0.1);
+        }
+
+        .stat-number {
+            font-size: 3rem;
+            font-weight: 700;
+            background: var(--gradient-1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            color: var(--text-muted);
+            font-size: 1rem;
+        }
+
+        /* Footer */
+        footer {
+            background: var(--dark-secondary);
+            border-top: 1px solid rgba(148, 163, 184, 0.1);
+            padding: 3rem 2rem;
+            text-align: center;
+            margin-top: 6rem;
+        }
+
+        .footer-content {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .social-links {
+            display: flex;
+            gap: 1.5rem;
+            justify-content: center;
+            margin-bottom: 2rem;
+        }
+
+        .social-links a {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: var(--dark-bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-light);
+            text-decoration: none;
+            transition: all 0.3s;
+        }
+
+        .social-links a:hover {
+            background: var(--gradient-1);
+            transform: translateY(-3px);
+        }
+
+        .footer-text {
+            color: var(--text-muted);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .nav-links {
+                display: none;
+            }
+
+            .hero {
+                padding: 6rem 1rem 3rem;
+            }
+
+            section {
+                padding: 4rem 1rem;
+            }
+
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .flow-diagram {
+                padding: 1rem;
+            }
+
+            .flow-diagram pre {
+                font-size: 0.75rem;
+            }
+        }
+
+        /* Code Block Styles */
+        .code-block {
+            background: #1a1a1a;
+            border-radius: 10px;
+            padding: 1.5rem;
+            overflow-x: auto;
+            margin: 1.5rem 0;
+            border: 1px solid rgba(148, 163, 184, 0.1);
+        }
+
+        .code-block code {
+            color: #a78bfa;
+            font-family: 'Courier New', monospace;
+            font-size: 0.875rem;
+        }
+
+        /* Animation */
+        .fade-in {
+            animation: fadeIn 0.6s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Highlight Box */
+        .highlight-box {
+            background: rgba(99, 102, 241, 0.1);
+            border-left: 4px solid var(--primary-color);
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin: 2rem 0;
+        }
+
+        .highlight-box h4 {
+            margin-bottom: 0.5rem;
+            color: var(--primary-color);
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header>
+        <nav>
+            <div class="logo">Bot Absensi</div>
+            <ul class="nav-links">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#features">Features</a></li>
+                <li><a href="#tech">Tech Stack</a></li>
+                <li><a href="#flow">Flow</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-content fade-in">
+            <div class="hero-badge">
+                <i class="fas fa-robot"></i> WhatsApp Bot
+            </div>
+            <h1>Bot Absensi & Invoice Generator</h1>
+            <p>Sistem otomatis berbasis WhatsApp yang dirancang untuk memudahkan pengelolaan absensi siswa dengan fitur pembuatan invoice otomatis. Menggabungkan teknologi WhatsApp Bot (Baileys), MongoDB, dan Dashboard Web.</p>
+            <div class="hero-buttons">
+                <a href="#overview" class="btn btn-primary">
+                    <i class="fas fa-arrow-down"></i> Explore Project
+                </a>
+                <a href="https://github.com" class="btn btn-secondary" target="_blank">
+                    <i class="fab fa-github"></i> View Code
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Overview Section -->
+    <section id="overview">
+        <div class="section-header">
+            <h2 class="section-title">Overview</h2>
+            <p class="section-subtitle">Sistem lengkap untuk pengelolaan absensi dan invoice otomatis</p>
+        </div>
+
+        <div class="highlight-box">
+            <h4>🎯 Project Goal</h4>
+            <p>Membangun sistem terintegrasi yang memungkinkan lembaga pendidikan atau kursus untuk:</p>
+            <ul style="margin-top: 1rem; margin-left: 1.5rem; color: var(--text-muted);">
+                <li>Mencatat absensi siswa via WhatsApp dengan mudah</li>
+                <li>Menghasilkan invoice otomatis setelah mencapai 4 absen</li>
+                <li>Melacak semua data absensi dan invoice melalui dashboard web</li>
+                <li>Mengelola statistik dan laporan keuangan secara real-time</li>
+            </ul>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card fade-in">
+                <div class="stat-number">3</div>
+                <div class="stat-label">Platform Integration</div>
+            </div>
+            <div class="stat-card fade-in">
+                <div class="stat-number">100%</div>
+                <div class="stat-label">Automated</div>
+            </div>
+            <div class="stat-card fade-in">
+                <div class="stat-number">24/7</div>
+                <div class="stat-label">Available</div>
+            </div>
+            <div class="stat-card fade-in">
+                <div class="stat-number">∞</div>
+                <div class="stat-label">Scalable Storage</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features">
+        <div class="section-header">
+            <h2 class="section-title">Key Features</h2>
+            <p class="section-subtitle">Fitur-fitur unggulan yang membuat sistem ini powerful dan mudah digunakan</p>
+        </div>
+
+        <div class="features-grid">
+            <div class="feature-card fade-in">
+                <div class="feature-icon">
+                    <i class="fas fa-camera"></i>
+                </div>
+                <h3>Pencatatan Absensi via Foto</h3>
+                <ul>
+                    <li>Kirim foto dengan caption khusus</li>
+                    <li>Format: <code>absen Nama Harga Tanggal Deskripsi</code></li>
+                    <li>Auto-save ke database MongoDB</li>
+                    <li>Foto disimpan ke Cloudflare R2 atau lokal</li>
+                    <li>Validasi data otomatis</li>
+                </ul>
+            </div>
+
+            <div class="feature-card fade-in">
+                <div class="feature-icon">
+                    <i class="fas fa-file-invoice"></i>
+                </div>
+                <h3>Invoice Generator Otomatis</h3>
+                <ul>
+                    <li>Auto-generate setelah 4 absen</li>
+                    <li>Template invoice profesional</li>
+                    <li>Grid 2x2 untuk foto absensi (max 4)</li>
+                    <li>Informasi lengkap per absen</li>
+                    <li>Manual generate via command</li>
+                </ul>
+            </div>
+
+            <div class="feature-card fade-in">
+                <div class="feature-icon">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+                <h3>Dashboard Web Analytics</h3>
+                <ul>
+                    <li>Real-time statistics</li>
+                    <li>Revenue charts per bulan</li>
+                    <li>Top students ranking</li>
+                    <li>Filter & search capabilities</li>
+                    <li>Export data (JSON/CSV)</li>
+                </ul>
+            </div>
+
+            <div class="feature-card fade-in">
+                <div class="feature-icon">
+                    <i class="fas fa-cloud"></i>
+                </div>
+                <h3>Cloud Storage Integration</h3>
+                <ul>
+                    <li>Cloudflare R2 object storage</li>
+                    <li>CDN untuk fast image loading</li>
+                    <li>Auto fallback ke local storage</li>
+                    <li>Unlimited storage capacity</li>
+                    <li>CORS proxy untuk dashboard</li>
+                </ul>
+            </div>
+
+            <div class="feature-card fade-in">
+                <div class="feature-icon">
+                    <i class="fas fa-shield-alt"></i>
+                </div>
+                <h3>Smart Tracking System</h3>
+                <ul>
+                    <li>Track invoice status per absen</li>
+                    <li>Mencegah duplikasi invoice</li>
+                    <li>Historis lengkap per siswa</li>
+                    <li>Error handling & retry mechanism</li>
+                    <li>Comprehensive logging</li>
+                </ul>
+            </div>
+
+            <div class="feature-card fade-in">
+                <div class="feature-icon">
+                    <i class="fas fa-mobile-alt"></i>
+                </div>
+                <h3>Responsive Design</h3>
+                <ul>
+                    <li>Mobile-friendly dashboard</li>
+                    <li>WhatsApp native integration</li>
+                    <li>Fast loading performance</li>
+                    <li>Modern UI/UX design</li>
+                    <li>Accessible dari berbagai device</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <!-- Technology Stack -->
+    <section id="tech">
+        <div class="section-header">
+            <h2 class="section-title">Technology Stack</h2>
+            <p class="section-subtitle">Teknologi modern yang digunakan untuk membangun sistem ini</p>
+        </div>
+
+        <div class="tech-grid">
+            <div class="tech-item">
+                <i class="fab fa-node-js"></i>
+                <h4>Node.js</h4>
+                <p>Runtime Environment</p>
+            </div>
+            <div class="tech-item">
+                <i class="fas fa-express"></i>
+                <h4>Express.js</h4>
+                <p>Web Framework</p>
+            </div>
+            <div class="tech-item">
+                <i class="fas fa-database"></i>
+                <h4>MongoDB</h4>
+                <p>NoSQL Database</p>
+            </div>
+            <div class="tech-item">
+                <i class="fab fa-whatsapp"></i>
+                <h4>Baileys</h4>
+                <p>WhatsApp Web API</p>
+            </div>
+            <div class="tech-item">
+                <i class="fas fa-image"></i>
+                <h4>Jimp</h4>
+                <p>Image Processing</p>
+            </div>
+            <div class="tech-item">
+                <i class="fas fa-cloud"></i>
+                <h4>Cloudflare R2</h4>
+                <p>Object Storage</p>
+            </div>
+            <div class="tech-item">
+                <i class="fab fa-js"></i>
+                <h4>Vanilla JS</h4>
+                <p>Frontend (No Framework)</p>
+            </div>
+            <div class="tech-item">
+                <i class="fas fa-chart-bar"></i>
+                <h4>Chart.js</h4>
+                <p>Data Visualization</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Flow Diagram Section -->
+    <section id="flow">
+        <div class="section-header">
+            <h2 class="section-title">System Flow</h2>
+            <p class="section-subtitle">Alur kerja sistem dari input sampai output</p>
+        </div>
+
+        <div class="highlight-box">
+            <h4>🔄 Main Flow - Absensi Input</h4>
+            <p>Ketika user mengirim foto dengan caption absensi:</p>
+        </div>
+
+        <!-- Visual Flow Diagram -->
+        <div class="visual-flow-container">
+            <div class="visual-flow-box user-action">
+                <div class="visual-flow-title">
+                    <i class="fas fa-user"></i> USER MENGIRIM FOTO
+                </div>
+                <div class="visual-flow-description">
+                    dengan caption: "absen Budi 150000 10/11/2025 Kelas Piano Dasar"
+                </div>
+            </div>
+
+            <div class="visual-flow-arrow"></div>
+
+            <div class="visual-flow-box process">
+                <div class="visual-flow-title">
+                    <i class="fas fa-robot"></i> BOT MENERIMA MESSAGE
+                </div>
+                <div class="visual-flow-description">
+                    Baileys WhatsApp API<br>
+                    • Detect message type: imageMessage<br>
+                    • Read caption body
+                </div>
+            </div>
+
+            <div class="visual-flow-arrow"></div>
+
+            <div class="visual-flow-box validation">
+                <div class="visual-flow-title">
+                    <i class="fas fa-check-circle"></i> VALIDASI CAPTION
+                </div>
+                <div class="visual-flow-description">
+                    ✓ Apakah caption dimulai dengan "absen"?<br>
+                    → Jika TIDAK: Exit (skip processing)<br>
+                    → Jika YA: Lanjut ke parsing
+                </div>
+            </div>
+
+            <div class="visual-flow-arrow"></div>
+
+            <div class="visual-flow-box process">
+                <div class="visual-flow-title">
+                    <i class="fas fa-code"></i> PARSE CAPTION DATA
+                </div>
+                <div class="visual-flow-description">
+                    • Extract: NamaSiswa (captionParts[0])<br>
+                    • Extract: Harga (captionParts[1])<br>
+                    • Extract: Tanggal (DD/MM/YYYY)<br>
+                    • Extract: Deskripsi (captionParts[3..])
+                </div>
+            </div>
+
+            <div class="visual-flow-arrow"></div>
+
+            <div class="visual-flow-box validation">
+                <div class="visual-flow-title">
+                    <i class="fas fa-shield-alt"></i> VALIDASI DATA
+                </div>
+                <div class="visual-flow-description">
+                    ✓ Apakah harga valid (number > 0)?<br>
+                    ✓ Apakah format tanggal valid (DD/MM/YYYY)?<br>
+                    ✓ Apakah tanggal valid (tidak invalid date)?<br>
+                    → Jika ERROR: Kirim error message<br>
+                    → Jika VALID: Lanjut ke download foto
+                </div>
+            </div>
+
+            <div class="visual-flow-arrow"></div>
+
+            <div class="visual-flow-box process">
+                <div class="visual-flow-title">
+                    <i class="fas fa-download"></i> DOWNLOAD FOTO DARI WHATSAPP
+                </div>
+                <div class="visual-flow-description">
+                    • Get image message<br>
+                    • Download via downloadContentFromMessage()<br>
+                    • Retry mechanism (max 5 attempts dengan delay)<br>
+                    • Buffer photo data
+                </div>
+            </div>
+
+            <div class="visual-flow-arrow"></div>
+
+            <div class="visual-flow-box storage">
+                <div class="visual-flow-title">
+                    <i class="fas fa-save"></i> SIMPAN FOTO
+                </div>
+                <div class="visual-flow-description">
+                    • Generate filename: nama_tanggal.jpg<br>
+                    • Path: ./absen/nama_10-11-2025.jpg<br>
+                    • Option 1: Upload ke R2 storage (Cloudflare)<br>
+                    • Option 2: Simpan ke local file system
+                </div>
+            </div>
+
+            <div class="visual-flow-arrow"></div>
+
+            <div class="visual-flow-box storage">
+                <div class="visual-flow-title">
+                    <i class="fas fa-database"></i> SIMPAN DATA KE MONGODB
+                </div>
+                <div class="visual-flow-description">
+                    Create Attendance document:<br>
+                    • nama: "Budi"<br>
+                    • harga: 150000<br>
+                    • tanggal: Date("2025-11-10")<br>
+                    • deskripsi: "Kelas Piano Dasar"<br>
+                    • foto_path: "absen/budi_10-11-2025.jpg"<br>
+                    • isInvoiced: false
+                </div>
+            </div>
+
+            <div class="visual-flow-arrow"></div>
+
+            <div class="visual-flow-box decision">
+                <div class="visual-flow-title">
+                    <i class="fas fa-question-circle"></i> CEK JUMLAH ABSEN BELUM DI-INVOICE
+                </div>
+                <div class="visual-flow-description">
+                    Query: Attendance.find({<br>
+                    &nbsp;&nbsp;nama: nama,<br>
+                    &nbsp;&nbsp;isInvoiced: false<br>
+                    })<br>
+                    Count: berapa absen yang belum di-invoice?
+                </div>
+            </div>
+
+            <!-- Branch -->
+            <div class="visual-branch-container">
+                <div class="visual-branch-path">
+                    <div class="visual-branch-label">Jumlah &lt; 4</div>
+                    <div class="visual-flow-box success">
+                        <div class="visual-flow-title">
+                            <i class="fas fa-check"></i> KIRIM RESPONSE
+                        </div>
+                        <div class="visual-flow-description">
+                            "✅ Data untuk Budi pada 10/11/2025 telah disimpan."
+                        </div>
+                    </div>
+                </div>
+
+                <div class="visual-branch-path">
+                    <div class="visual-branch-label">Jumlah &gt;= 4</div>
+                    <div class="visual-flow-arrow"></div>
+                    <div class="visual-flow-box process">
+                        <div class="visual-flow-title">
+                            <i class="fas fa-file-invoice"></i> GENERATE INVOICE OTOMATIS
+                        </div>
+                        <div class="visual-flow-description">
+                            • Get 4 absen pertama<br>
+                            • Generate invoice dengan Jimp<br>
+                            • Composite 4 foto (2x2 grid)<br>
+                            • Add text (nama, tanggal, dll)<br>
+                            • Save invoice PNG
+                        </div>
+                    </div>
+                    <div class="visual-flow-arrow"></div>
+                    <div class="visual-flow-box storage">
+                        <div class="visual-flow-title">
+                            <i class="fas fa-check-double"></i> MARK ABSEN SEBAGAI SUDAH DI-INVOICE
+                        </div>
+                        <div class="visual-flow-description">
+                            Update 4 absen:<br>
+                            isInvoiced = true
+                        </div>
+                    </div>
+                    <div class="visual-flow-arrow"></div>
+                    <div class="visual-flow-box success">
+                        <div class="visual-flow-title">
+                            <i class="fas fa-paper-plane"></i> KIRIM INVOICE KE USER
+                        </div>
+                        <div class="visual-flow-description">
+                            Send invoice image<br>
+                            Caption: "📄 Invoice untuk Budi telah dibuat otomatis"
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mermaid Interactive Diagram -->
+        <div class="highlight-box" style="margin-top: 3rem;">
+            <h4>📊 Interactive Architecture Diagram</h4>
+            <p>Diagram interaktif menggunakan Mermaid.js:</p>
+        </div>
+
+        <div class="mermaid">
+            graph TB
+                A[User WhatsApp<br/>Send Photo + Caption] -->|Validate & Parse| B[WhatsApp Bot<br/>Baileys]
+                B -->|Valid Data?| C{Valid?}
+                C -->|No| D[Send Error Message]
+                C -->|Yes| E[Download Photo]
+                E --> F[Upload to R2 Storage]
+                E --> G[Save to Local]
+                F --> H[MongoDB<br/>Attendance Data]
+                G --> H
+                H -->|Save Attendance| I{Uninvoiced<br/>Count >= 4?}
+                I -->|No| J[Send Success<br/>Message]
+                I -->|Yes| K[Generate Invoice<br/>Jimp]
+                K --> L[Mark as Invoiced]
+                L --> M[Send Invoice to<br/>WhatsApp]
+                
+                H -->|API| N[Dashboard Web<br/>Server Express]
+                N --> O[REST API<br/>Endpoints]
+                O --> P[Frontend<br/>Dashboard]
+                P --> Q[Statistics]
+                P --> R[Charts]
+                P --> S[Data Export]
+                
+                style A fill:#667eea,stroke:#333,stroke-width:3px,color:#fff
+                style B fill:#764ba2,stroke:#333,stroke-width:3px,color:#fff
+                style H fill:#43e97b,stroke:#333,stroke-width:3px,color:#fff
+                style F fill:#4facfe,stroke:#333,stroke-width:3px,color:#fff
+                style N fill:#f5576c,stroke:#333,stroke-width:3px,color:#fff
+                style P fill:#fa709a,stroke:#333,stroke-width:3px,color:#fff
+                style K fill:#fee140,stroke:#333,stroke-width:3px,color:#000
+                style C fill:#f093fb,stroke:#333,stroke-width:3px,color:#fff
+                style I fill:#f093fb,stroke:#333,stroke-width:3px,color:#fff
+        </div>
+
+        <div class="highlight-box" style="margin-top: 2rem;">
+            <h4>📄 Flow - Manual Invoice</h4>
+            <p>Command: <code>invoice [NamaSiswa]</code></p>
+            <ol style="margin-top: 1rem; margin-left: 1.5rem; color: var(--text-muted);">
+                <li>Query semua absen belum di-invoice untuk siswa tersebut</li>
+                <li>Generate invoice dengan semua absen (maksimal 4 foto pertama)</li>
+                <li>Mark semua absen sebagai sudah di-invoice</li>
+                <li>Kirim invoice ke WhatsApp</li>
+            </ol>
+        </div>
+    </section>
+
+    <!-- Architecture Section -->
+    <section>
+        <div class="section-header">
+            <h2 class="section-title">System Architecture</h2>
+            <p class="section-subtitle">Arsitektur sistem yang scalable dan maintainable</p>
+        </div>
+
+        <div class="flow-diagram">
+            <pre>
+┌─────────────────────────────────────────────────────────┐
+│                    WhatsApp Bot                          │
+│  ┌──────────────────────────────────────────────────┐  │
+│  │  Baileys (WhatsApp Web API)                      │  │
+│  │  - Receive messages                              │  │
+│  │  - Process attendance commands                   │  │
+│  │  - Generate invoices                             │  │
+│  └──────────────────────────────────────────────────┘  │
+└──────────────────┬──────────────────────────────────────┘
+                   │
+        ┌──────────┴──────────┐
+        │                     │
+┌───────▼─────────┐  ┌────────▼────────┐
+│   MongoDB       │  │  Cloudflare R2   │
+│   - Attendance  │  │  - Photos        │
+│   - Metadata    │  │  - Storage       │
+└───────┬─────────┘  └──────────────────┘
+        │
+        │
+┌───────▼───────────────────────────────────────┐
+│         Dashboard Web Server                  │
+│  ┌────────────────────────────────────────┐  │
+│  │  Express.js API                        │  │
+│  │  - REST API endpoints                  │  │
+│  │  - Image processing                    │  │
+│  │  - Data aggregation                    │  │
+│  └────────────────────────────────────────┘  │
+│  ┌────────────────────────────────────────┐  │
+│  │  Frontend (HTML/CSS/JS)                │  │
+│  │  - Statistics dashboard                │  │
+│  │  - Attendance table                    │  │
+│  │  - Charts & graphs                     │  │
+│  └────────────────────────────────────────┘  │
+└───────────────────────────────────────────────┘
+            </pre>
+        </div>
+    </section>
+
+    <!-- Usage Examples -->
+    <section>
+        <div class="section-header">
+            <h2 class="section-title">Usage Examples</h2>
+            <p class="section-subtitle">Contoh penggunaan sistem</p>
+        </div>
+
+        <div class="features-grid">
+            <div class="feature-card">
+                <h3><i class="fas fa-comment-dots"></i> Input Absensi</h3>
+                <div class="code-block">
+                    <code>User mengirim foto dengan caption:<br>
+"absen Budi 150000 10/11/2025 Kelas Piano Dasar"<br><br>
+Bot response:<br>
+"✅ Data untuk Budi pada 10/11/2025 telah disimpan."</code>
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <h3><i class="fas fa-file-invoice"></i> Auto Invoice</h3>
+                <div class="code-block">
+                    <code>Setelah absen ke-4 untuk Budi:<br>
+1. Generate invoice otomatis<br>
+2. Mark 4 absen sebagai invoiced<br>
+3. Kirim invoice ke WhatsApp<br><br>
+"📄 Invoice untuk Budi telah dibuat otomatis."</code>
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <h3><i class="fas fa-terminal"></i> Manual Invoice</h3>
+                <div class="code-block">
+                    <code>User command:<br>
+"invoice Budi"<br><br>
+Bot response:<br>
+"📄 Invoice untuk Budi (6 absen)<br>
+Total: Rp 900.000"</code>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="footer-content">
+            <div class="social-links">
+                <a href="https://github.com" target="_blank" title="GitHub">
+                    <i class="fab fa-github"></i>
+                </a>
+                <a href="https://linkedin.com" target="_blank" title="LinkedIn">
+                    <i class="fab fa-linkedin"></i>
+                </a>
+                <a href="https://nicola.id" target="_blank" title="Website">
+                    <i class="fas fa-globe"></i>
+                </a>
+                <a href="mailto:contact@nicola.id" title="Email">
+                    <i class="fas fa-envelope"></i>
+                </a>
+            </div>
+            <p class="footer-text">
+                © 2025 Bot Absensi & Invoice Generator | Built with ❤️ by Nicola
+            </p>
+            <p class="footer-text" style="margin-top: 0.5rem; font-size: 0.875rem;">
+                <a href="https://nicola.id" style="color: var(--primary-color); text-decoration: none;">nicola.id</a>
+            </p>
+        </div>
+    </footer>
+
+    <!-- Scroll Animation Script -->
+    <script>
+        // Initialize Mermaid
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'dark',
+            themeVariables: {
+                primaryColor: '#6366f1',
+                primaryTextColor: '#fff',
+                primaryBorderColor: '#764ba2',
+                lineColor: '#6366f1',
+                secondaryColor: '#764ba2',
+                tertiaryColor: '#f093fb',
+                noteBkgColor: '#1e293b',
+                noteTextColor: '#f8fafc',
+                noteBorderColor: '#6366f1',
+                fontFamily: 'Inter, sans-serif',
+                fontSize: '14px'
+            },
+            flowchart: {
+                nodeSpacing: 80,
+                rankSpacing: 100,
+                curve: 'basis',
+                padding: 20
+            }
+        });
+
+        // Fade in on scroll
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.feature-card, .tech-item, .stat-card, .visual-flow-box').forEach(el => {
+            el.style.opacity = '0';
+            el.style.transform = 'translateY(20px)';
+            el.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+            observer.observe(el);
+        });
+
+        // Smooth scroll for navigation links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+    </script>
+</body>
+</html>
+

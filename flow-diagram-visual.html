@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flow Diagram - Bot Absensi</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 2rem;
+            color: #fff;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 3rem;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .subtitle {
+            text-align: center;
+            font-size: 1.2rem;
+            margin-bottom: 3rem;
+            opacity: 0.9;
+        }
+
+        .diagram-section {
+            margin-bottom: 4rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            padding: 2rem;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .diagram-section h2 {
+            font-size: 1.8rem;
+            margin-bottom: 1.5rem;
+            color: #fff;
+            text-align: center;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Mermaid Styling */
+        .mermaid {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 2rem;
+            margin: 1rem 0;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Custom Flow Boxes */
+        .flow-container {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            align-items: center;
+        }
+
+        .flow-box {
+            background: rgba(255, 255, 255, 0.95);
+            color: #333;
+            padding: 1.5rem 2rem;
+            border-radius: 12px;
+            min-width: 300px;
+            text-align: center;
+            position: relative;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s;
+            animation: fadeInUp 0.6s ease-out;
+        }
+
+        .flow-box:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .flow-box::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 5px;
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px 0 0 12px;
+        }
+
+        .flow-box.user-action {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-weight: bold;
+        }
+
+        .flow-box.process {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+
+        .flow-box.validation {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+        }
+
+        .flow-box.storage {
+            background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+            color: white;
+        }
+
+        .flow-box.decision {
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+            color: white;
+            border: 3px dashed rgba(255, 255, 255, 0.5);
+        }
+
+        .flow-box.success {
+            background: linear-gradient(135deg, #30cfd0 0%, #330867 100%);
+            color: white;
+        }
+
+        .flow-arrow {
+            width: 3px;
+            height: 40px;
+            background: rgba(255, 255, 255, 0.6);
+            margin: 0 auto;
+            position: relative;
+            animation: pulse 1.5s infinite;
+        }
+
+        .flow-arrow::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-top: 12px solid rgba(255, 255, 255, 0.6);
+        }
+
+        .branch-container {
+            display: flex;
+            gap: 2rem;
+            justify-content: center;
+            margin: 1.5rem 0;
+            flex-wrap: wrap;
+        }
+
+        .branch-path {
+            flex: 1;
+            min-width: 250px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .branch-label {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: bold;
+            border: 2px solid rgba(255, 255, 255, 0.5);
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 0.6;
+            }
+            50% {
+                opacity: 1;
+            }
+        }
+
+        .icon {
+            font-size: 1.5rem;
+            margin-right: 0.5rem;
+        }
+
+        .flow-title {
+            font-weight: bold;
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .flow-description {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            justify-content: center;
+            margin-top: 2rem;
+            padding: 1.5rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1.5rem;
+            }
+
+            h1 {
+                font-size: 1.8rem;
+            }
+
+            .flow-box {
+                min-width: 250px;
+                padding: 1rem 1.5rem;
+            }
+
+            .branch-container {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 Flow Diagram - Bot Absensi & Invoice Generator</h1>
+        <p class="subtitle">Visualisasi alur kerja sistem dari input sampai output</p>
+
+        <!-- Flow Diagram 1: Proses Absensi Input -->
+        <div class="diagram-section">
+            <h2>📸 1. Flow Diagram - Proses Absensi (Input Foto)</h2>
+            
+            <div class="flow-container">
+                <!-- Step 1: User Input -->
+                <div class="flow-box user-action" style="animation-delay: 0s;">
+                    <div class="flow-title">
+                        <span class="icon">👤</span> USER MENGIRIM FOTO
+                    </div>
+                    <div class="flow-description">
+                        dengan caption: "absen Budi 150000 10/11/2025 Kelas Piano Dasar"
+                    </div>
+                </div>
+
+                <div class="flow-arrow"></div>
+
+                <!-- Step 2: Bot Receive -->
+                <div class="flow-box process" style="animation-delay: 0.1s;">
+                    <div class="flow-title">
+                        <span class="icon">🤖</span> BOT MENERIMA MESSAGE
+                    </div>
+                    <div class="flow-description">
+                        Baileys WhatsApp API<br>
+                        • Detect message type: imageMessage<br>
+                        • Read caption body
+                    </div>
+                </div>
+
+                <div class="flow-arrow"></div>
+
+                <!-- Step 3: Validation -->
+                <div class="flow-box validation" style="animation-delay: 0.2s;">
+                    <div class="flow-title">
+                        <span class="icon">✓</span> VALIDASI CAPTION
+                    </div>
+                    <div class="flow-description">
+                        ✓ Apakah caption dimulai dengan "absen"?<br>
+                        → Jika TIDAK: Exit (skip processing)<br>
+                        → Jika YA: Lanjut ke parsing
+                    </div>
+                </div>
+
+                <div class="flow-arrow"></div>
+
+                <!-- Step 4: Parse Data -->
+                <div class="flow-box process" style="animation-delay: 0.3s;">
+                    <div class="flow-title">
+                        <span class="icon">🔍</span> PARSE CAPTION DATA
+                    </div>
+                    <div class="flow-description">
+                        • Extract: NamaSiswa<br>
+                        • Extract: Harga<br>
+                        • Extract: Tanggal (DD/MM/YYYY)<br>
+                        • Extract: Deskripsi
+                    </div>
+                </div>
+
+                <div class="flow-arrow"></div>
+
+                <!-- Step 5: Validate Data -->
+                <div class="flow-box validation" style="animation-delay: 0.4s;">
+                    <div class="flow-title">
+                        <span class="icon">✅</span> VALIDASI DATA
+                    </div>
+                    <div class="flow-description">
+                        ✓ Harga valid (number > 0)?<br>
+                        ✓ Format tanggal valid?<br>
+                        ✓ Tanggal tidak invalid?<br>
+                        → Jika ERROR: Kirim error message<br>
+                        → Jika VALID: Lanjut
+                    </div>
+                </div>
+
+                <div class="flow-arrow"></div>
+
+                <!-- Step 6: Download Foto -->
+                <div class="flow-box process" style="animation-delay: 0.5s;">
+                    <div class="flow-title">
+                        <span class="icon">📥</span> DOWNLOAD FOTO DARI WHATSAPP
+                    </div>
+                    <div class="flow-description">
+                        • Get image message<br>
+                        • Download via downloadContentFromMessage()<br>
+                        • Retry mechanism (max 5 attempts)<br>
+                        • Buffer photo data
+                    </div>
+                </div>
+
+                <div class="flow-arrow"></div>
+
+                <!-- Step 7: Save Foto -->
+                <div class="flow-box storage" style="animation-delay: 0.6s;">
+                    <div class="flow-title">
+                        <span class="icon">💾</span> SIMPAN FOTO
+                    </div>
+                    <div class="flow-description">
+                        • Generate filename: nama_tanggal.jpg<br>
+                        • Path: ./absen/nama_10-11-2025.jpg<br>
+                        • Option 1: Upload ke R2 (Cloudflare)<br>
+                        • Option 2: Save ke local file system
+                    </div>
+                </div>
+
+                <div class="flow-arrow"></div>
+
+                <!-- Step 8: Save to MongoDB -->
+                <div class="flow-box storage" style="animation-delay: 0.7s;">
+                    <div class="flow-title">
+                        <span class="icon">🗄️</span> SIMPAN DATA KE MONGODB
+                    </div>
+                    <div class="flow-description">
+                        Create Attendance document:<br>
+                        • nama: "Budi"<br>
+                        • harga: 150000<br>
+                        • tanggal: Date<br>
+                        • deskripsi: "Kelas Piano Dasar"<br>
+                        • foto_path: "absen/budi_10-11-2025.jpg"<br>
+                        • isInvoiced: false
+                    </div>
+                </div>
+
+                <div class="flow-arrow"></div>
+
+                <!-- Step 9: Check Count -->
+                <div class="flow-box decision" style="animation-delay: 0.8s;">
+                    <div class="flow-title">
+                        <span class="icon">🔢</span> CEK JUMLAH ABSEN BELUM DI-INVOICE
+                    </div>
+                    <div class="flow-description">
+                        Query: Attendance.find({<br>
+                        &nbsp;&nbsp;nama: nama,<br>
+                        &nbsp;&nbsp;isInvoiced: false<br>
+                        })<br>
+                        Count: berapa absen yang belum di-invoice?
+                    </div>
+                </div>
+
+                <!-- Branch -->
+                <div class="branch-container">
+                    <div class="branch-path">
+                        <div class="branch-label">Jumlah < 4</div>
+                        <div class="flow-box success" style="animation-delay: 0.9s;">
+                            <div class="flow-title">
+                                <span class="icon">✅</span> KIRIM RESPONSE
+                            </div>
+                            <div class="flow-description">
+                                "✅ Data untuk Budi pada 10/11/2025 telah disimpan."
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="branch-path">
+                        <div class="branch-label">Jumlah >= 4</div>
+                        <div class="flow-arrow"></div>
+                        <div class="flow-box process" style="animation-delay: 1s;">
+                            <div class="flow-title">
+                                <span class="icon">📄</span> GENERATE INVOICE OTOMATIS
+                            </div>
+                            <div class="flow-description">
+                                • Get 4 absen pertama<br>
+                                • Generate invoice dengan Jimp<br>
+                                • Composite 4 foto (2x2 grid)<br>
+                                • Add text (nama, tanggal, dll)<br>
+                                • Save invoice PNG
+                            </div>
+                        </div>
+                        <div class="flow-arrow"></div>
+                        <div class="flow-box storage" style="animation-delay: 1.1s;">
+                            <div class="flow-title">
+                                <span class="icon">✔️</span> MARK ABSEN SEBAGAI SUDAH DI-INVOICE
+                            </div>
+                            <div class="flow-description">
+                                Update 4 absen:<br>
+                                isInvoiced = true
+                            </div>
+                        </div>
+                        <div class="flow-arrow"></div>
+                        <div class="flow-box success" style="animation-delay: 1.2s;">
+                            <div class="flow-title">
+                                <span class="icon">📤</span> KIRIM INVOICE KE USER
+                            </div>
+                            <div class="flow-description">
+                                Send invoice image<br>
+                                Caption: "📄 Invoice untuk Budi telah dibuat otomatis"
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-color" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);"></div>
+                    <span>User Action</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);"></div>
+                    <span>Process</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);"></div>
+                    <span>Validation</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);"></div>
+                    <span>Storage</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);"></div>
+                    <span>Decision</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: linear-gradient(135deg, #30cfd0 0%, #330867 100%);"></div>
+                    <span>Success</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Flow Diagram 2: Manual Invoice -->
+        <div class="diagram-section">
+            <h2>📄 2. Flow Diagram - Proses Invoice Manual</h2>
+            
+            <div class="flow-container">
+                <div class="flow-box user-action" style="animation-delay: 0s;">
+                    <div class="flow-title">
+                        <span class="icon">👤</span> USER MENGIRIM COMMAND
+                    </div>
+                    <div class="flow-description">
+                        "invoice Budi"
+                    </div>
+                </div>
+
+                <div class="flow-arrow"></div>
+
+                <div class="flow-box process" style="animation-delay: 0.1s;">
+                    <div class="flow-title">
+                        <span class="icon">🤖</span> BOT MENERIMA MESSAGE
+                    </div>
+                    <div class="flow-description">
+                        • Detect command: "invoice"<br>
+                        • Extract parameter: "Budi" (nama siswa)
+                    </div>
+                </div>
+
+                <div class="flow-arrow"></div>
+
+                <div class="flow-box process" style="animation-delay: 0.2s;">
+                    <div class="flow-title">
+                        <span class="icon">🔍</span> QUERY ABSEN BELUM DI-INVOICE
+                    </div>
+                    <div class="flow-description">
+                        Attendance.find({<br>
+                        &nbsp;&nbsp;nama: { $regex: /^Budi$/i },<br>
+                        &nbsp;&nbsp;isInvoiced: false<br>
+                        })<br>
+                        Sort by: createdAt (ascending)
+                    </div>
+                </div>
+
+                <div class="flow-arrow"></div>
+
+                <div class="flow-box decision" style="animation-delay: 0.3s;">
+                    <div class="flow-title">
+                        <span class="icon">❓</span> CEK HASIL QUERY
+                    </div>
+                    <div class="flow-description">
+                        → Jika TIDAK ADA: Kirim error message<br>
+                        → Jika ADA: Lanjut ke generate invoice
+                    </div>
+                </div>
+
+                <div class="flow-arrow"></div>
+
+                <div class="flow-box process" style="animation-delay: 0.4s;">
+                    <div class="flow-title">
+                        <span class="icon">🖼️</span> GENERATE INVOICE
+                    </div>
+                    <div class="flow-description">
+                        • Load template: ./images/invoice.png<br>
+                        • Loop absen (maksimal 4 foto pertama)<br>
+                        • Download foto dari R2/lokal<br>
+                        • Resize foto ke 320x320<br>
+                        • Composite ke invoice (grid 2x2)<br>
+                        • Add text: tanggal, deskripsi, harga<br>
+                        • Add nama siswa & tanggal invoice<br>
+                        • Calculate & add total harga<br>
+                        • Generate PNG buffer
+                    </div>
+                </div>
+
+                <div class="flow-arrow"></div>
+
+                <div class="flow-box storage" style="animation-delay: 0.5s;">
+                    <div class="flow-title">
+                        <span class="icon">💾</span> SIMPAN INVOICE FILE
+                    </div>
+                    <div class="flow-description">
+                        Filename: invoice_budi_DD-MM-YYYY.png<br>
+                        Path: ./invoice/invoice_budi_10-11-2025.png
+                    </div>
+                </div>
+
+                <div class="flow-arrow"></div>
+
+                <div class="flow-box storage" style="animation-delay: 0.6s;">
+                    <div class="flow-title">
+                        <span class="icon">✔️</span> MARK ABSEN SEBAGAI SUDAH DI-INVOICE
+                    </div>
+                    <div class="flow-description">
+                        Update all queried attendances:<br>
+                        isInvoiced = true
+                    </div>
+                </div>
+
+                <div class="flow-arrow"></div>
+
+                <div class="flow-box success" style="animation-delay: 0.7s;">
+                    <div class="flow-title">
+                        <span class="icon">📤</span> KIRIM INVOICE KE USER
+                    </div>
+                    <div class="flow-description">
+                        Send invoice image<br>
+                        Caption: "📄 Invoice untuk Budi (6 absen)<br>
+                        Total: Rp 900.000"
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mermaid Diagram -->
+        <div class="diagram-section">
+            <h2>📊 3. Architecture Diagram (Interactive)</h2>
+            <div class="mermaid">
+                graph TB
+                    A[User WhatsApp] -->|Send Photo + Caption| B[WhatsApp Bot Baileys]
+                    B -->|Validate & Parse| C{Valid Data?}
+                    C -->|No| D[Send Error Message]
+                    C -->|Yes| E[Download Photo]
+                    E --> F[Upload to R2 Storage]
+                    E --> G[Save to Local]
+                    F --> H[MongoDB]
+                    G --> H
+                    H -->|Save Attendance| I{Uninvoiced Count >= 4?}
+                    I -->|No| J[Send Success Message]
+                    I -->|Yes| K[Generate Invoice Jimp]
+                    K --> L[Mark as Invoiced]
+                    L --> M[Send Invoice to WhatsApp]
+                    
+                    H -->|API| N[Dashboard Web Server Express]
+                    N --> O[REST API Endpoints]
+                    O --> P[Frontend Dashboard]
+                    P --> Q[Statistics]
+                    P --> R[Charts]
+                    P --> S[Data Export]
+                    
+                    style A fill:#667eea,stroke:#333,stroke-width:2px,color:#fff
+                    style B fill:#764ba2,stroke:#333,stroke-width:2px,color:#fff
+                    style H fill:#43e97b,stroke:#333,stroke-width:2px,color:#fff
+                    style F fill:#4facfe,stroke:#333,stroke-width:2px,color:#fff
+                    style N fill:#f5576c,stroke:#333,stroke-width:2px,color:#fff
+                    style P fill:#fa709a,stroke:#333,stroke-width:2px,color:#fff
+                    style K fill:#fee140,stroke:#333,stroke-width:2px,color:#000
+            </div>
+        </div>
+
+        <!-- System Overview -->
+        <div class="diagram-section">
+            <h2>🎯 4. System Overview (Complete Flow)</h2>
+            <div class="mermaid">
+                flowchart LR
+                    subgraph Input["📱 Input Layer"]
+                        A[User sends Photo<br/>with Caption]
+                        B[User sends Command<br/>invoice Nama]
+                    end
+                    
+                    subgraph Processing["⚙️ Processing Layer"]
+                        C[WhatsApp Bot<br/>Baileys]
+                        D[Validate & Parse]
+                        E[Image Processing<br/>Jimp]
+                    end
+                    
+                    subgraph Storage["💾 Storage Layer"]
+                        F[MongoDB<br/>Attendance Data]
+                        G[Cloudflare R2<br/>Photo Storage]
+                        H[Local File System<br/>Invoice Files]
+                    end
+                    
+                    subgraph Output["📤 Output Layer"]
+                        I[Invoice PNG]
+                        J[WhatsApp Response]
+                        K[Dashboard Web UI]
+                    end
+                    
+                    A --> C
+                    B --> C
+                    C --> D
+                    D --> E
+                    D --> F
+                    E --> F
+                    E --> G
+                    E --> H
+                    F --> I
+                    F --> K
+                    G --> I
+                    H --> I
+                    I --> J
+                    
+                    style Input fill:#667eea,stroke:#333,stroke-width:3px,color:#fff
+                    style Processing fill:#764ba2,stroke:#333,stroke-width:3px,color:#fff
+                    style Storage fill:#43e97b,stroke:#333,stroke-width:3px,color:#fff
+                    style Output fill:#f5576c,stroke:#333,stroke-width:3px,color:#fff
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Mermaid
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'default',
+            themeVariables: {
+                primaryColor: '#667eea',
+                primaryTextColor: '#fff',
+                primaryBorderColor: '#764ba2',
+                lineColor: '#667eea',
+                secondaryColor: '#764ba2',
+                tertiaryColor: '#f093fb',
+                noteBkgColor: '#fff',
+                noteTextColor: '#333',
+                noteBorderColor: '#667eea',
+                fontFamily: 'Inter, sans-serif'
+            },
+            flowchart: {
+                nodeSpacing: 80,
+                rankSpacing: 100,
+                curve: 'basis',
+                padding: 20
+            }
+        });
+
+        // Add scroll animations
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -100px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.diagram-section').forEach(el => {
+            el.style.opacity = '0';
+            el.style.transform = 'translateY(30px)';
+            el.style.transition = 'opacity 0.8s ease, transform 0.8s ease';
+            observer.observe(el);
+        });
+    </script>
+</body>
+</html>
+
