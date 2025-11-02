@@ -1629,6 +1629,95 @@ case 'invoice': {
 }
 break
 
+case 'blmbyr': case 'belumbayar': case 'belumbyr': {
+    try {
+        // Hitung 5 minggu yang lalu (35 hari)
+        const limaMingguLalu = moment().subtract(5, 'weeks').toDate();
+        
+        // Ambil semua murid yang memiliki absen dengan isInvoiced: false
+        const semuaMurid = await Attendance.distinct('nama', { isInvoiced: false });
+        
+        if (semuaMurid.length === 0) {
+            return await reply('✅ Tidak ada murid dengan absen yang belum terinvoice.');
+        }
+        
+        // Array untuk menyimpan murid yang memenuhi kriteria
+        const muridBelumBayar = [];
+        
+        // Periksa setiap murid
+        for (const namaMurid of semuaMurid) {
+            // Ambil semua absen yang belum terinvoice untuk murid ini
+            const absenBelumInvoice = await Attendance.find({
+                nama: namaMurid,
+                isInvoiced: false
+            }).sort({ tanggal: -1 }); // Sort dari yang terbaru
+            
+            // Kriteria: kurang dari 4 pertemuan (1, 2, atau 3)
+            if (absenBelumInvoice.length >= 1 && absenBelumInvoice.length < 4) {
+                // Cari tanggal absen terakhir
+                const absenTerakhir = absenBelumInvoice[0]; // Yang pertama adalah yang terbaru
+                const tanggalAbsenTerakhir = moment(absenTerakhir.tanggal);
+                
+                // Cek apakah absen terakhir lebih dari 5 minggu yang lalu
+                if (tanggalAbsenTerakhir.isBefore(limaMingguLalu)) {
+                    // Hitung total harga yang belum dibayar
+                    const totalBelumBayar = absenBelumInvoice.reduce((sum, att) => sum + att.harga, 0);
+                    
+                    // Hitung berapa hari sudah tidak absen
+                    const hariTidakAbsen = moment().diff(tanggalAbsenTerakhir, 'days');
+                    
+                    muridBelumBayar.push({
+                        nama: namaMurid,
+                        jumlahPertemuan: absenBelumInvoice.length,
+                        tanggalAbsenTerakhir: absenTerakhir.tanggal,
+                        totalBelumBayar: totalBelumBayar,
+                        hariTidakAbsen: hariTidakAbsen
+                    });
+                }
+            }
+        }
+        
+        // Tampilkan hasil
+        if (muridBelumBayar.length === 0) {
+            return await reply('✅ Tidak ada murid yang memenuhi kriteria:\n\n• Kurang dari 4 pertemuan (1/2/3)\n• Tidak absen selama 5 minggu terakhir\n• Invoice belum terbit');
+        }
+        
+        // Sort berdasarkan hari tidak absen (terlama dulu)
+        muridBelumBayar.sort((a, b) => b.hariTidakAbsen - a.hariTidakAbsen);
+        
+        // Buat pesan
+        let message = `💰 *DAFTAR MURID BELUM BAYAR* 💰\n\n`;
+        message += `📋 Kriteria:\n`;
+        message += `• Kurang dari 4 pertemuan (1/2/3 pertemuan)\n`;
+        message += `• Tidak absen selama 5+ minggu\n`;
+        message += `• Invoice belum terbit\n\n`;
+        message += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+        
+        muridBelumBayar.forEach((murid, index) => {
+            const tanggalStr = moment(murid.tanggalAbsenTerakhir).format('DD/MM/YYYY');
+            const mingguTidakAbsen = Math.floor(murid.hariTidakAbsen / 7);
+            const sisaHari = murid.hariTidakAbsen % 7;
+            
+            message += `${index + 1}. *${murid.nama}*\n`;
+            message += `   📝 Pertemuan: ${murid.jumlahPertemuan}x\n`;
+            message += `   📅 Absen terakhir: ${tanggalStr}\n`;
+            message += `   ⏰ Tidak absen: ${mingguTidakAbsen} minggu ${sisaHari > 0 ? `${sisaHari} hari` : ''} (${murid.hariTidakAbsen} hari)\n`;
+            message += `   💰 Total belum bayar: Rp ${murid.totalBelumBayar.toLocaleString('id-ID')}\n\n`;
+        });
+        
+        message += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+        message += `💡 *Tindakan:*\n`;
+        message += `Gunakan command *Invoice [NamaMurid]* untuk membuat invoice manual setelah menghubungi murid.\n\n`;
+        message += `📞 Silakan hubungi murid-murid di atas untuk mengingatkan pembayaran.`;
+        
+        await reply(message);
+    } catch (err) {
+        console.error('Error processing blmbyr command:', err);
+        return await reply(`⚠️ Terjadi kesalahan: ${err.message}`);
+    }
+}
+break
+
 case 'cekmurid': case 'ceksiswa': case 'cekabsen': {
     try {
         // Get nama from args
