@@ -195,6 +195,41 @@ app.use((req, res, next) => {
 app.use('/absen', express.static(path.join(__dirname, 'absen')));
 app.use('/invoice', express.static(path.join(__dirname, 'invoice')));
 
+// Proxy endpoint for CDN images (to bypass CORS)
+app.get('/api/image/:imagePath(*)', async (req, res) => {
+    try {
+        const { imagePath } = req.params;
+        const imageUrl = `https://cdn-absen.nicola.id/${imagePath}`;
+        
+        try {
+            const response = await axios.get(imageUrl, { 
+                responseType: 'arraybuffer',
+                timeout: 10000
+            });
+            
+            const contentType = response.headers['content-type'] || 'image/jpeg';
+            const buffer = Buffer.from(response.data);
+            
+            res.setHeader('Content-Type', contentType);
+            res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache 1 year
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            res.send(buffer);
+        } catch (error) {
+            console.error(`Error proxying image ${imageUrl}:`, error.message);
+            res.status(404).json({
+                success: false,
+                message: 'Image not found or failed to load'
+            });
+        }
+    } catch (error) {
+        console.error('Error in image proxy:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+});
+
 // API Routes
 
 // Get all attendances with pagination
@@ -238,9 +273,20 @@ app.get('/api/attendances', async (req, res) => {
             
             // Check if photo is in R2 or local
             if (att.foto_path.startsWith('http') || att.foto_path.startsWith('https')) {
-                // Photo has public URL, use it directly
-                result.foto_base64 = att.foto_path;
-                console.log(`✅ Using CDN URL for ${att.nama}: ${att.foto_path}`);
+                // Photo has public URL, use proxy endpoint to bypass CORS
+                // Extract path from URL for proxy
+                let proxyUrl;
+                if (att.foto_path.includes('cdn-absen.nicola.id/')) {
+                    // Use proxy endpoint for CDN URLs to bypass CORS
+                    const imagePath = att.foto_path.replace('https://cdn-absen.nicola.id/', '');
+                    proxyUrl = `/api/image/${imagePath}`;
+                    result.foto_base64 = proxyUrl;
+                    console.log(`✅ Using proxy URL for ${att.nama}: ${proxyUrl}`);
+                } else {
+                    // Other URLs, use directly (might work if CORS is configured)
+                    result.foto_base64 = att.foto_path;
+                    console.log(`✅ Using CDN URL for ${att.nama}: ${att.foto_path}`);
+                }
             } else if (att.foto_path.startsWith('absen/')) {
                 // Photo is in R2, get public URL or download
                 try {
@@ -423,9 +469,20 @@ app.get('/api/attendances/student/:nama', async (req, res) => {
             
             // Check if photo is in R2 or local
             if (att.foto_path.startsWith('http') || att.foto_path.startsWith('https')) {
-                // Photo has public URL, use it directly
-                result.foto_base64 = att.foto_path;
-                console.log(`✅ Using CDN URL for ${att.nama}: ${att.foto_path}`);
+                // Photo has public URL, use proxy endpoint to bypass CORS
+                // Extract path from URL for proxy
+                let proxyUrl;
+                if (att.foto_path.includes('cdn-absen.nicola.id/')) {
+                    // Use proxy endpoint for CDN URLs to bypass CORS
+                    const imagePath = att.foto_path.replace('https://cdn-absen.nicola.id/', '');
+                    proxyUrl = `/api/image/${imagePath}`;
+                    result.foto_base64 = proxyUrl;
+                    console.log(`✅ Using proxy URL for ${att.nama}: ${proxyUrl}`);
+                } else {
+                    // Other URLs, use directly (might work if CORS is configured)
+                    result.foto_base64 = att.foto_path;
+                    console.log(`✅ Using CDN URL for ${att.nama}: ${att.foto_path}`);
+                }
             } else if (att.foto_path.startsWith('absen/')) {
                 // Photo is in R2, get public URL or download
                 try {
