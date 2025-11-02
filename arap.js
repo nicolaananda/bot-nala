@@ -12,7 +12,8 @@ const fetch = require('node-fetch')
 const Jimp = require('jimp');
 const QRCode = require('qrcode'); 
 const crypto = require('crypto');
-const mongoose = require('mongoose'); 
+const mongoose = require('mongoose');
+const { uploadToR2, downloadFromR2, deleteFromR2, getR2PublicUrl } = require('./lib/r2'); 
 let set_bot = JSON.parse(fs.readFileSync('./database/set_bot.json'));
 const cheerio = require('cheerio'); // Pastikan cheerio sudah di-require
 const { HttpsProxyAgent } = require('https-proxy-agent');
@@ -189,11 +190,34 @@ async function generateAttendanceInvoice(attendances) {
         const pos = photoPositions[i];
         
         try {
-            // Load and resize photo
-            if (!fs.existsSync(att.foto_path)) {
-                throw new Error(`File not found: ${att.foto_path}`);
+            // Load photo from R2 or local file
+            let photoBuffer;
+            if (att.foto_path.startsWith('http') || att.foto_path.startsWith('absen/')) {
+                // Photo is in R2
+                try {
+                    const key = att.foto_path.includes('/') && !att.foto_path.startsWith('./')
+                        ? att.foto_path.split('/').slice(-2).join('/') // Keep 'absen/filename.jpg'
+                        : `absen/${att.foto_path.replace('./absen/', '').replace('absen/', '')}`;
+                    photoBuffer = await downloadFromR2(key);
+                    console.log(`✅ Foto downloaded from R2: ${key}`);
+                } catch (r2Error) {
+                    console.error('Error downloading from R2, trying local:', r2Error);
+                    // Fallback to local file
+                    if (fs.existsSync(att.foto_path)) {
+                        photoBuffer = await fs.promises.readFile(att.foto_path);
+                    } else {
+                        throw new Error(`File not found: ${att.foto_path}`);
+                    }
+                }
+            } else {
+                // Photo is local file
+                if (!fs.existsSync(att.foto_path)) {
+                    throw new Error(`File not found: ${att.foto_path}`);
+                }
+                photoBuffer = await fs.promises.readFile(att.foto_path);
             }
-            const photo = await Jimp.read(att.foto_path);
+            
+            const photo = await Jimp.read(photoBuffer);
             photo.resize(photoWidth, photoHeight, Jimp.RESIZE_BILINEAR);
             
             // Composite photo onto invoice at exact position
@@ -1445,9 +1469,21 @@ function Styles(text, style = 1) {
                 
                 // Get current time for filename (HHmmss format)
                 const jamSekarang = moment().format('HHmmss');
-                const fotoFileName = `${nama.toLowerCase().replace(/\s+/g, '_')}_${day}-${month}-${year}_${jamSekarang}.jpg`;
-                const fotoPath = `./absen/${fotoFileName}`;
-                fs.writeFileSync(fotoPath, photoBuffer);
+                const fotoFileName = `absen/${nama.toLowerCase().replace(/\s+/g, '_')}_${day}-${month}-${year}_${jamSekarang}.jpg`;
+                
+                // Try to upload to R2, fallback to local storage
+                let fotoPath;
+                try {
+                    const r2Url = await uploadToR2(photoBuffer, fotoFileName, 'image/jpeg');
+                    fotoPath = r2Url; // Store R2 URL or key
+                    console.log(`✅ Foto uploaded to R2: ${fotoPath}`);
+                } catch (r2Error) {
+                    console.warn('⚠️ R2 upload failed, saving locally:', r2Error.message);
+                    // Fallback to local storage
+                    const localPath = `./absen/${fotoFileName.replace('absen/', '')}`;
+                    fs.writeFileSync(localPath, photoBuffer);
+                    fotoPath = localPath;
+                }
                 
                 // Save to MongoDB
                 const attendance = new Attendance({
@@ -1494,11 +1530,11 @@ function Styles(text, style = 1) {
                         }, { quoted: m });
                     } catch (invoiceErr) {
                         console.error('Error generating invoice:', invoiceErr);
-                        await reply(`✅ Data untuk ${nama} pada ${tanggalFormatted} telah disimpan.\n⚠️ Gagal membuat invoice: ${invoiceErr.message}`);
+                        await reply(`✅ Data untuk ${nama} pada ${tanggalFormatted} telah disimpan.\n\n🆔 ID: *${attendance._id.toString()}*\n\n⚠️ Gagal membuat invoice: ${invoiceErr.message}\n\n💡 Gunakan command *HapusAbsen ${attendance._id.toString()}* untuk menghapus data.`);
                     }
                 } else {
-                    // Send confirmation
-                    await reply(`✅ Data untuk ${nama} pada ${tanggalFormatted} telah disimpan.`);
+                    // Send confirmation with ID
+                    await reply(`✅ Data untuk ${nama} pada ${tanggalFormatted} telah disimpan.\n\n🆔 ID: *${attendance._id.toString()}*\n\n💡 Gunakan command *HapusAbsen ${attendance._id.toString()}* untuk menghapus data jika diperlukan.`);
                 }
             } else {
                 return await reply('⚠️ Format caption salah!\n\nFormat: *absen* NamaMurid Harga Tanggal(DD/MM/YYYY) DeskripsiKelas\nContoh: *absen* Andi 100000 02/11/2025 Kelas Gitar Dasar');
@@ -1659,6 +1695,57 @@ case 'cekmurid': case 'ceksiswa': case 'cekabsen': {
         await reply(detailMessage);
     } catch (err) {
         console.error('Error processing cekmurid command:', err);
+        return await reply(`⚠️ Terjadi kesalahan: ${err.message}`);
+    }
+}
+break
+
+case 'hapusabsen': case 'deleteabsen': case 'delabsen': {
+    try {
+        if (!text || !text.trim()) {
+            return await reply('⚠️ Format command salah!\n\nFormat: *HapusAbsen* [ID]\nContoh: *HapusAbsen* 507f1f77bcf86cd799439011');
+        }
+        
+        const attendanceId = text.trim();
+        
+        // Find attendance by ID
+        const attendance = await Attendance.findById(attendanceId);
+        
+        if (!attendance) {
+            return await reply(`⚠️ Data absensi dengan ID *${attendanceId}* tidak ditemukan.`);
+        }
+        
+        // Get info before delete
+        const namaSiswa = attendance.nama;
+        const tanggalFormatted = moment(attendance.tanggal).format('DD/MM/YYYY');
+        const harga = attendance.harga;
+        const deskripsi = attendance.deskripsi;
+        const fotoPath = attendance.foto_path;
+        
+        // Delete attendance from database
+        await Attendance.findByIdAndDelete(attendanceId);
+        
+        // Delete photo from R2 or local file
+        if (fotoPath.startsWith('http') || fotoPath.startsWith('absen/')) {
+            // Photo is in R2
+            try {
+                await deleteFromR2(fotoPath);
+            } catch (err) {
+                console.error('Error deleting from R2:', err);
+            }
+        } else if (fs.existsSync(fotoPath)) {
+            // Photo is local file
+            try {
+                fs.unlinkSync(fotoPath);
+            } catch (err) {
+                console.error('Error deleting photo file:', err);
+            }
+        }
+        
+        await reply(`✅ Data absensi berhasil dihapus!\n\n📋 Detail Data yang Dihapus:\n• Nama: *${namaSiswa}*\n• Tanggal: ${tanggalFormatted}\n• Kelas: ${deskripsi}\n• Harga: Rp ${harga.toLocaleString('id-ID')}\n• ID: ${attendanceId}`);
+        
+    } catch (err) {
+        console.error('Error processing hapusabsen command:', err);
         return await reply(`⚠️ Terjadi kesalahan: ${err.message}`);
     }
 }
