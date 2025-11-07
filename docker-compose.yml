@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  whatsapp-bot:
+    build: .
+    container_name: bot-nala-whatsapp
+    command: node index.js
+    restart: unless-stopped
+    volumes:
+      - ./auth:/app/auth
+      - ./database:/app/database
+      - ./absen:/app/absen
+      - ./invoice:/app/invoice
+      - ./GATEWAY:/app/GATEWAY
+      - ./image:/app/image
+      - ./images:/app/images
+    env_file:
+      - .env
+    networks:
+      - bot-network
+
+  dashboard-server:
+    build: .
+    container_name: bot-nala-dashboard
+    command: node dashboard-server.js
+    restart: unless-stopped
+    ports:
+      - "1395:1395"
+    volumes:
+      - ./database:/app/database
+      - ./absen:/app/absen
+      - ./invoice:/app/invoice
+      - ./images:/app/images
+      - ./dashboard:/app/dashboard
+    env_file:
+      - .env
+    networks:
+      - bot-network
+    depends_on:
+      - whatsapp-bot
+
+  telegram-bot:
+    build: .
+    container_name: bot-nala-telegram
+    command: node telegram-bot.js
+    restart: unless-stopped
+    volumes:
+      - ./database:/app/database
+      - ./absen:/app/absen
+      - ./invoice:/app/invoice
+      - ./images:/app/images
+    env_file:
+      - .env
+    networks:
+      - bot-network
+    depends_on:
+      - whatsapp-bot
+
+networks:
+  bot-network:
+    driver: bridge
+
