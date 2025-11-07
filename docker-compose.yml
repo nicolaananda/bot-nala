@@ -6,6 +6,9 @@ services:
     container_name: bot-nala-whatsapp
     command: node index.js
     restart: unless-stopped
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     volumes:
       - ./auth:/app/auth
       - ./database:/app/database
@@ -24,6 +27,9 @@ services:
     container_name: bot-nala-dashboard
     command: node dashboard-server.js
     restart: unless-stopped
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     ports:
       - "1395:1395"
     volumes:
@@ -44,6 +50,9 @@ services:
     container_name: bot-nala-telegram
     command: node telegram-bot.js
     restart: unless-stopped
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     volumes:
       - ./database:/app/database
       - ./absen:/app/absen
