@@ -10,83 +10,192 @@ let currentInvoiceData = null;
 let allStudents = [];
 let allAttendances = [];
 
-// Format currency
+// --- Utility Functions ---
+
 function formatCurrency(amount) {
     return new Intl.NumberFormat('id-ID', {
         style: 'currency',
         currency: 'IDR',
-        minimumFractionDigits: 0
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
     }).format(amount);
 }
 
-// Format date
 function formatDate(dateString) {
+    if (!dateString) return '-';
     const date = new Date(dateString);
     return date.toLocaleDateString('id-ID', {
         day: '2-digit',
-        month: '2-digit',
+        month: 'long',
         year: 'numeric'
     });
 }
 
-// Format datetime
 function formatDateTime(dateString) {
+    if (!dateString) return '-';
     const date = new Date(dateString);
     return date.toLocaleDateString('id-ID', {
         day: '2-digit',
-        month: '2-digit',
+        month: 'long',
         year: 'numeric',
         hour: '2-digit',
         minute: '2-digit'
     });
 }
 
-// Toast notification
 function showToast(message, type = 'success') {
     const toast = document.getElementById('toast');
-    const icon = toast.querySelector('.toast-icon');
     const messageEl = toast.querySelector('.toast-message');
-    
+    const iconEl = toast.querySelector('.toast-icon');
+
     toast.className = `toast ${type}`;
-    messageEl.textContent = message;
-    
-    const icons = {
-        success: 'fas fa-check-circle',
-        error: 'fas fa-exclamation-circle',
-        warning: 'fas fa-exclamation-triangle'
-    };
-    
-    icon.className = `toast-icon ${icons[type] || icons.success}`;
+    if (messageEl) messageEl.textContent = message;
+
+    // Icons
+    let iconHtml = '';
+    if (type === 'success') iconHtml = '<i class="fas fa-check-circle"></i>';
+    else if (type === 'error') iconHtml = '<i class="fas fa-times-circle"></i>';
+    else if (type === 'warning') iconHtml = '<i class="fas fa-exclamation-triangle"></i>';
+
+    if (iconEl) iconEl.innerHTML = iconHtml;
     toast.classList.add('show');
-    
+
     setTimeout(() => {
         toast.classList.remove('show');
     }, 3000);
 }
 
-// Update last update time
 function updateLastUpdate() {
     const now = new Date();
-    document.getElementById('lastUpdate').textContent = 
-        `Terakhir diupdate: ${formatDateTime(now)}`;
+    const el = document.getElementById('lastUpdate');
+    if (el) el.textContent = `Updated: ${formatDateTime(now)}`;
 }
 
-// Load statistics
+// --- Navigation & UI Logic ---
+
+function initSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const sidebarToggle = document.getElementById('sidebarToggle');
+    const closeSidebar = document.getElementById('closeSidebar');
+    const exportDropdown = document.getElementById('exportDropdown');
+
+    if (sidebarToggle) {
+        sidebarToggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            sidebar.classList.toggle('active');
+        });
+    }
+
+    if (closeSidebar) {
+        closeSidebar.addEventListener('click', () => {
+            sidebar.classList.remove('active');
+        });
+    }
+
+    // Close sidebar when clicking outside on mobile
+    document.addEventListener('click', (e) => {
+        if (window.innerWidth <= 1024) {
+            if (sidebar && !sidebar.contains(e.target) && sidebarToggle && !sidebarToggle.contains(e.target)) {
+                sidebar.classList.remove('active');
+            }
+        }
+
+        // Close dropdowns
+        if (exportDropdown && !e.target.closest('.dropdown')) {
+            exportDropdown.classList.remove('show');
+        }
+    });
+
+    // Nav Item Click Handlers
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.addEventListener('click', function () {
+            // Only for main menu items that switch tabs
+            if (this.getAttribute('onclick') && this.getAttribute('onclick').includes('showTab')) {
+                // Remove active class from all nav items
+                document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+                // Add active class to clicked item
+                this.classList.add('active');
+
+                // On mobile, close sidebar after selection
+                if (window.innerWidth <= 1024) {
+                    sidebar.classList.remove('active');
+                }
+            }
+        });
+    });
+}
+
+function toggleExportDropdown() {
+    const dropdown = document.getElementById('exportDropdown');
+    if (dropdown) dropdown.classList.toggle('show');
+}
+
+function showTab(tabName) {
+    console.log('Switching to tab:', tabName);
+    currentTab = tabName;
+
+    // Update Tab Content Visibility
+    document.querySelectorAll('.tab-content').forEach(content => {
+        content.classList.remove('active');
+        content.style.display = 'none'; // Ensure hidden
+    });
+
+    const targetTab = document.getElementById(`${tabName}Tab`);
+    if (targetTab) {
+        targetTab.classList.add('active');
+        targetTab.style.display = 'block'; // Ensure visible
+    }
+
+    // Update Sidebar Active State
+    document.querySelectorAll('.nav-item').forEach(btn => btn.classList.remove('active'));
+    const activeBtn = Array.from(document.querySelectorAll('.nav-item')).find(btn =>
+        btn.getAttribute('onclick') && btn.getAttribute('onclick').includes(`'${tabName}'`)
+    );
+    if (activeBtn) activeBtn.classList.add('active');
+
+    // Update Page Title
+    const titles = {
+        'attendances': 'Daftar Absensi',
+        'students': 'Daftar Siswa',
+        'charts': 'Analytics Overview'
+    };
+    const titleEl = document.querySelector('.page-title');
+    if (titleEl) titleEl.textContent = titles[tabName] || 'Dashboard';
+
+    // Load Data
+    if (tabName === 'attendances') {
+        loadAttendances(currentPage);
+    } else if (tabName === 'students') {
+        loadStudents();
+    } else if (tabName === 'charts') {
+        loadStatistics();
+    }
+}
+
+// --- Data Loading ---
+
 async function loadStatistics() {
     try {
         const response = await fetch('/api/statistics');
         const result = await response.json();
-        
+
         if (result.success) {
             const stats = result.data;
-            document.getElementById('totalStudents').textContent = stats.totalStudents;
-            document.getElementById('totalAttendances').textContent = stats.totalAttendances;
-            document.getElementById('totalRevenue').textContent = formatCurrency(stats.totalRevenue);
-            document.getElementById('invoicedCount').textContent = stats.invoicedCount;
-            document.getElementById('uninvoicedCount').textContent = stats.uninvoicedCount;
-            
+
+            // Update Stats Cards
+            const updateEl = (id, val) => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = val;
+            };
+
+            updateEl('totalStudents', stats.totalStudents);
+            updateEl('totalAttendances', stats.totalAttendances);
+            updateEl('totalRevenue', formatCurrency(stats.totalRevenue));
+            updateEl('invoicedCount', stats.invoicedCount);
+            updateEl('uninvoicedCount', stats.uninvoicedCount);
+
             updateLastUpdate();
-            
+
             // Update charts if on charts tab
             if (currentTab === 'charts') {
                 updateCharts(stats);
@@ -98,26 +207,28 @@ async function loadStatistics() {
     }
 }
 
-// Load attendances
 async function loadAttendances(page = 1) {
     try {
-        const namaFilter = document.getElementById('namaFilter').value;
-        const dateFrom = document.getElementById('dateFrom').value;
-        const dateTo = document.getElementById('dateTo').value;
+        const tbody = document.getElementById('attendancesTableBody');
+        if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="loading-state"><div class="spinner"></div><span>Memuat data...</span></td></tr>';
+
+        const namaFilter = document.getElementById('namaFilter')?.value || '';
+        const dateFrom = document.getElementById('dateFrom')?.value || '';
+        const dateTo = document.getElementById('dateTo')?.value || '';
         const invoiceStatusFilter = document.getElementById('invoiceStatusFilter')?.value || '';
-        
+
         let url = `/api/attendances?page=${page}&limit=20`;
         if (namaFilter) url += `&nama=${encodeURIComponent(namaFilter)}`;
         if (dateFrom) url += `&dateFrom=${dateFrom}`;
         if (dateTo) url += `&dateTo=${dateTo}`;
-        
+
         const response = await fetch(url);
         const result = await response.json();
-        
+
         if (result.success) {
             allAttendances = result.data;
-            
-            // Filter by invoice status if needed
+
+            // Client-side filter for invoice status (if API doesn't support it yet)
             let filteredData = allAttendances;
             if (invoiceStatusFilter !== '') {
                 filteredData = allAttendances.filter(att => {
@@ -126,61 +237,159 @@ async function loadAttendances(page = 1) {
                     return true;
                 });
             }
-            
-            const tbody = document.getElementById('attendancesTableBody');
-            tbody.innerHTML = '';
-            
+
+            if (tbody) tbody.innerHTML = '';
+
             if (filteredData.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" class="loading">Tidak ada data absensi</td></tr>';
-                document.getElementById('attendancesBadge').textContent = '0';
+                if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="loading-state">Tidak ada data absensi</td></tr>';
+                const badge = document.getElementById('attendancesBadge');
+                if (badge) badge.textContent = '0';
                 return;
             }
-            
-            document.getElementById('attendancesBadge').textContent = result.pagination.total;
-            
+
+            const badge = document.getElementById('attendancesBadge');
+            if (badge) badge.textContent = result.pagination.total;
+
             filteredData.forEach(att => {
                 const tr = document.createElement('tr');
                 const isChecked = selectedAttendances.has(att._id);
-                const fotoCell = att.foto_base64 
-                    ? `<td><img src="${att.foto_base64}" alt="Foto absensi" class="attendance-photo" crossorigin="anonymous" onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22%3E%3Ctext x=%2250%22 y=%2250%22 text-anchor=%22middle%22 dy=%22.3em%22 font-size=%2212%22%3EFoto tidak ditemukan%3C/text%3E%3C/svg%3E'; console.error('Failed to load image:', '${att.foto_base64}');" onclick="openModal('${att.foto_base64}', '${att.nama}', '${formatDate(att.tanggal)}', '${att.deskripsi}', '${formatCurrency(att.harga)}')"></td>`
-                    : `<td>-</td>`;
-                
+
+                // Safe image handling
+                let fotoHtml = '<td><span class="no-photo">-</span></td>';
+                if (att.foto_base64) {
+                    // Escape single quotes for onclick
+                    const safeFoto = att.foto_base64.replace(/'/g, "\\'");
+                    const safeNama = att.nama.replace(/'/g, "\\'");
+                    const safeDesc = att.deskripsi.replace(/'/g, "\\'");
+
+                    fotoHtml = `<td>
+                        <img src="${att.foto_base64}" 
+                             alt="Foto" 
+                             class="attendance-photo" 
+                             onclick="openModal('${safeFoto}', '${safeNama}', '${formatDate(att.tanggal)}', '${safeDesc}', '${formatCurrency(att.harga)}')"
+                             onerror="this.src='https://placehold.co/100x100?text=No+Image'">
+                    </td>`;
+                }
+
                 tr.innerHTML = `
-                    <td><input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleAttendanceSelection('${att._id}')"></td>
-                    ${fotoCell}
-                    <td><strong>${att.nama}</strong></td>
-                    <td>${formatDate(att.tanggal)}</td>
-                    <td>${att.deskripsi}</td>
-                    <td>${formatCurrency(att.harga)}</td>
-                    <td><span class="badge ${att.isInvoiced ? 'badge-success' : 'badge-warning'}">${att.isInvoiced ? 'Sudah' : 'Belum'}</span></td>
                     <td>
-                        <div style="display: flex; gap: 5px; flex-wrap: wrap;">
-                            ${!att.isInvoiced ? `<button class="btn btn-sm btn-primary" onclick="generateSingleInvoice('${att.nama}', ['${att._id}'])">
-                                <i class="fas fa-file-invoice"></i> Invoice
-                            </button>` : '<span class="badge badge-success">Done</span>'}
-                            <button class="btn btn-sm btn-danger" onclick="deleteAttendance('${att._id}', '${att.nama}', '${formatDate(att.tanggal)}')" title="Hapus data">
-                                <i class="fas fa-trash"></i> Hapus
+                        <div class="checkbox-wrapper">
+                            <input type="checkbox" id="cb_${att._id}" ${isChecked ? 'checked' : ''} onchange="toggleAttendanceSelection('${att._id}')">
+                            <label for="cb_${att._id}"></label>
+                        </div>
+                    </td>
+                    ${fotoHtml}
+                    <td>
+                        <div class="student-info">
+                            <span class="student-name">${att.nama}</span>
+                        </div>
+                    </td>
+                    <td>${formatDate(att.tanggal)}</td>
+                    <td><span class="desc-truncate" title="${att.deskripsi}">${att.deskripsi}</span></td>
+                    <td class="font-mono">${formatCurrency(att.harga)}</td>
+                    <td>
+                        <span class="badge ${att.isInvoiced ? 'badge-success' : 'badge-warning'}">
+                            ${att.isInvoiced ? 'Invoiced' : 'Pending'}
+                        </span>
+                    </td>
+                    <td>
+                        <div class="action-buttons">
+                            ${!att.isInvoiced ? `
+                                <button class="btn-icon-sm btn-primary-light" onclick="generateSingleInvoice('${att.nama}', ['${att._id}'])" title="Generate Invoice">
+                                    <i class="fas fa-file-invoice"></i>
+                                </button>
+                            ` : ''}
+                            <button class="btn-icon-sm btn-danger-light" onclick="deleteAttendance('${att._id}', '${att.nama}', '${formatDate(att.tanggal)}')" title="Hapus">
+                                <i class="fas fa-trash"></i>
                             </button>
                         </div>
                     </td>
                 `;
                 tbody.appendChild(tr);
             });
-            
-            // Update pagination
+
             updatePagination(result.pagination);
             currentPage = page;
             updateSelectedCount();
         }
     } catch (error) {
         console.error('Error loading attendances:', error);
-        document.getElementById('attendancesTableBody').innerHTML = 
-            '<tr><td colspan="8" class="loading">Error memuat data</td></tr>';
+        const tbody = document.getElementById('attendancesTableBody');
+        if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="loading-state">Error memuat data. Silakan refresh.</td></tr>';
         showToast('Gagal memuat data absensi', 'error');
     }
 }
 
-// Toggle attendance selection
+async function loadStudents() {
+    try {
+        const tbody = document.getElementById('studentsTableBody');
+        if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="loading-state"><div class="spinner"></div><span>Memuat data...</span></td></tr>';
+
+        const response = await fetch('/api/students');
+        const result = await response.json();
+
+        if (result.success) {
+            allStudents = result.data;
+            if (tbody) tbody.innerHTML = '';
+
+            if (result.data.length === 0) {
+                if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="loading-state">Tidak ada data siswa</td></tr>';
+                const badge = document.getElementById('studentsBadge');
+                if (badge) badge.textContent = '0';
+                return;
+            }
+
+            const badge = document.getElementById('studentsBadge');
+            if (badge) badge.textContent = result.data.length;
+
+            result.data.forEach(student => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><strong>${student.nama}</strong></td>
+                    <td>${student.totalAttendances}</td>
+                    <td><span class="text-success">${student.invoicedCount}</span></td>
+                    <td><span class="text-warning">${student.uninvoicedCount}</span></td>
+                    <td class="font-mono">${formatCurrency(student.totalHarga)}</td>
+                    <td>${student.lastAttendance ? formatDate(student.lastAttendance) : '-'}</td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="btn-icon-sm btn-info-light" onclick="viewStudentAttendances('${student.nama}')" title="Lihat Detail">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            ${student.uninvoicedCount > 0 ? `
+                                <button class="btn-icon-sm btn-primary-light" onclick="generateInvoiceFromStudent('${student.nama}')" title="Generate Invoice">
+                                    <i class="fas fa-file-invoice"></i>
+                                </button>
+                            ` : ''}
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            // Populate select
+            const select = document.getElementById('invoiceStudentSelect');
+            if (select) {
+                select.innerHTML = '<option value="">-- Pilih Siswa --</option>';
+                result.data.forEach(student => {
+                    if (student.uninvoicedCount > 0) {
+                        const option = document.createElement('option');
+                        option.value = student.nama;
+                        option.textContent = `${student.nama} (${student.uninvoicedCount} pending)`;
+                        select.appendChild(option);
+                    }
+                });
+            }
+        }
+    } catch (error) {
+        console.error('Error loading students:', error);
+        const tbody = document.getElementById('studentsTableBody');
+        if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="loading-state">Error memuat data</td></tr>';
+    }
+}
+
+// --- Actions ---
+
 function toggleAttendanceSelection(id) {
     if (selectedAttendances.has(id)) {
         selectedAttendances.delete(id);
@@ -190,737 +399,466 @@ function toggleAttendanceSelection(id) {
     updateSelectedCount();
 }
 
-// Toggle select all
 function toggleSelectAll() {
-    const checkbox = document.getElementById('selectAll');
     const headerCheckbox = document.getElementById('selectAllHeader');
-    const isChecked = checkbox.checked;
-    
-    if (headerCheckbox) headerCheckbox.checked = isChecked;
-    
+    const isChecked = headerCheckbox.checked;
+
     const tbody = document.getElementById('attendancesTableBody');
     const checkboxes = tbody.querySelectorAll('input[type="checkbox"]');
-    
+
     if (isChecked) {
         checkboxes.forEach(cb => {
             const row = cb.closest('tr');
-            const id = row.querySelector('input[type="checkbox"]').getAttribute('onchange').match(/'([^']+)'/)[1];
-            selectedAttendances.add(id);
-            cb.checked = true;
+            // Find the ID from the onchange attribute
+            const onchange = row.querySelector('input[type="checkbox"]').getAttribute('onchange');
+            if (onchange) {
+                const match = onchange.match(/'([^']+)'/);
+                if (match) {
+                    const id = match[1];
+                    selectedAttendances.add(id);
+                    cb.checked = true;
+                }
+            }
         });
     } else {
         selectedAttendances.clear();
         checkboxes.forEach(cb => cb.checked = false);
     }
-    
+
     updateSelectedCount();
 }
 
-// Update selected count
 function updateSelectedCount() {
     const count = selectedAttendances.size;
-    document.getElementById('selectedCount').textContent = `${count} selected`;
+    const countEl = document.getElementById('selectedCount');
     const bulkBtn = document.getElementById('bulkInvoiceBtn');
-    bulkBtn.disabled = count === 0;
+
+    if (countEl) countEl.textContent = `${count} selected`;
+    if (bulkBtn) bulkBtn.disabled = count === 0;
 }
 
-// Load students
-async function loadStudents() {
-    try {
-        const response = await fetch('/api/students');
-        const result = await response.json();
-        
-        if (result.success) {
-            allStudents = result.data;
-            const tbody = document.getElementById('studentsTableBody');
-            tbody.innerHTML = '';
-            
-            if (result.data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" class="loading">Tidak ada data siswa</td></tr>';
-                document.getElementById('studentsBadge').textContent = '0';
-                return;
-            }
-            
-            document.getElementById('studentsBadge').textContent = result.data.length;
-            
-            result.data.forEach(student => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td><strong>${student.nama}</strong></td>
-                    <td>${student.totalAttendances}</td>
-                    <td>${student.invoicedCount}</td>
-                    <td>${student.uninvoicedCount}</td>
-                    <td>${formatCurrency(student.totalHarga)}</td>
-                    <td>${student.lastAttendance ? formatDate(student.lastAttendance) : '-'}</td>
-                    <td>
-                        <div style="display: flex; gap: 5px; flex-wrap: wrap;">
-                            <button class="btn btn-sm btn-success" onclick="viewStudentAttendances('${student.nama}')">
-                                <i class="fas fa-eye"></i> Lihat
-                            </button>
-                            ${student.uninvoicedCount > 0 ? `
-                                <button class="btn btn-sm btn-primary" onclick="generateInvoiceFromStudent('${student.nama}')">
-                                    <i class="fas fa-file-invoice"></i> Invoice
-                                </button>
-                            ` : ''}
-                        </div>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
-            
-            // Populate student select for invoice modal
-            const select = document.getElementById('invoiceStudentSelect');
-            select.innerHTML = '<option value="">-- Pilih Siswa --</option>';
-            result.data.forEach(student => {
-                if (student.uninvoicedCount > 0) {
-                    const option = document.createElement('option');
-                    option.value = student.nama;
-                    option.textContent = `${student.nama} (${student.uninvoicedCount} belum invoice)`;
-                    select.appendChild(option);
-                }
-            });
-        }
-    } catch (error) {
-        console.error('Error loading students:', error);
-        document.getElementById('studentsTableBody').innerHTML = 
-            '<tr><td colspan="7" class="loading">Error memuat data</td></tr>';
-        showToast('Gagal memuat data siswa', 'error');
-    }
-}
-
-// Generate invoice from student
-async function generateInvoiceFromStudent(nama) {
-    try {
-        showToast('Sedang membuat invoice...', 'warning');
-        
-        const response = await fetch('/api/invoice/generate', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ nama })
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            currentInvoiceData = result.data;
-            showInvoicePreview(result.data);
-            showToast('Invoice berhasil dibuat!', 'success');
-            loadStatistics();
-            loadAttendances(currentPage);
-            loadStudents();
-        } else {
-            showToast(result.message || 'Gagal membuat invoice', 'error');
-        }
-    } catch (error) {
-        console.error('Error generating invoice:', error);
-        showToast('Gagal membuat invoice', 'error');
-    }
-}
-
-// Generate single invoice
 async function generateSingleInvoice(nama, attendanceIds) {
     try {
-        showToast('Sedang membuat invoice...', 'warning');
-        
+        showToast('Generating invoice...', 'warning');
+
         const response = await fetch('/api/invoice/generate', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ nama, attendanceIds })
         });
-        
+
         const result = await response.json();
-        
+
         if (result.success) {
             currentInvoiceData = result.data;
             showInvoicePreview(result.data);
-            showToast('Invoice berhasil dibuat!', 'success');
+            showToast('Invoice generated successfully!', 'success');
             loadStatistics();
             loadAttendances(currentPage);
             loadStudents();
         } else {
-            showToast(result.message || 'Gagal membuat invoice', 'error');
+            showToast(result.message || 'Failed to generate invoice', 'error');
         }
     } catch (error) {
-        console.error('Error generating invoice:', error);
-        showToast('Gagal membuat invoice', 'error');
+        console.error('Error:', error);
+        showToast('Server error', 'error');
     }
 }
 
-// Bulk generate invoice
 async function bulkGenerateInvoice() {
-    if (selectedAttendances.size === 0) {
-        showToast('Pilih absensi terlebih dahulu', 'warning');
-        return;
-    }
-    
+    if (selectedAttendances.size === 0) return;
+
     const attendanceIds = Array.from(selectedAttendances);
+    // Assuming all selected are from same student for now, or backend handles it.
+    // Ideally we should check if they are same student.
+    // For simplicity, we take the first one's name.
     const firstAtt = allAttendances.find(att => attendanceIds.includes(att._id));
-    
-    if (!firstAtt) {
-        showToast('Data tidak ditemukan', 'error');
+
+    if (!firstAtt) return;
+
+    // Verify all selected are same student
+    const differentStudent = attendanceIds.some(id => {
+        const att = allAttendances.find(a => a._id === id);
+        return att && att.nama !== firstAtt.nama;
+    });
+
+    if (differentStudent) {
+        showToast('Please select attendances for the same student only', 'error');
         return;
     }
-    
+
     await generateSingleInvoice(firstAtt.nama, attendanceIds);
     selectedAttendances.clear();
-    loadAttendances(currentPage);
+    updateSelectedCount();
 }
 
-// Show generate invoice modal
-function showGenerateInvoiceModal() {
-    document.getElementById('generateInvoiceModal').style.display = 'block';
-    loadStudents();
-}
-
-// Close generate invoice modal
-function closeGenerateInvoiceModal() {
-    document.getElementById('generateInvoiceModal').style.display = 'none';
-    document.getElementById('uninvoicedAttendancesList').innerHTML = '';
-    document.getElementById('invoicePreview').innerHTML = '';
-}
-
-// Load uninvoiced attendances for selected student
-async function loadUninvoicedAttendances() {
-    const studentName = document.getElementById('invoiceStudentSelect').value;
-    
-    if (!studentName) {
-        document.getElementById('uninvoicedAttendancesList').innerHTML = '';
-        document.getElementById('invoicePreview').innerHTML = '';
-        return;
-    }
-    
-    try {
-        const response = await fetch(`/api/attendances/student/${encodeURIComponent(studentName)}`);
-        const result = await response.json();
-        
-        if (result.success) {
-            const uninvoiced = result.data.filter(att => !att.isInvoiced);
-            
-            if (uninvoiced.length === 0) {
-                document.getElementById('uninvoicedAttendancesList').innerHTML = 
-                    '<p style="text-align: center; color: var(--text-secondary); padding: 20px;">Semua absensi sudah di-invoice</p>';
-                return;
-            }
-            
-            const list = document.getElementById('uninvoicedAttendancesList');
-            list.innerHTML = '<h4 style="margin-bottom: 15px;">Pilih Absensi untuk Invoice:</h4>';
-            
-            uninvoiced.forEach((att, index) => {
-                const item = document.createElement('div');
-                item.className = 'attendance-item';
-                item.innerHTML = `
-                    <input type="checkbox" id="att_${att._id}" value="${att._id}" onchange="updateInvoicePreview()">
-                    ${att.foto_base64 ? `<img src="${att.foto_base64}" alt="Foto">` : ''}
-                    <div class="attendance-item-info">
-                        <h4>${att.deskripsi}</h4>
-                        <p>${formatDate(att.tanggal)} - ${formatCurrency(att.harga)}</p>
-                    </div>
-                `;
-                list.appendChild(item);
-            });
-            
-            updateInvoicePreview();
-        }
-    } catch (error) {
-        console.error('Error loading attendances:', error);
-        showToast('Gagal memuat data absensi', 'error');
-    }
-}
-
-// Update invoice preview
-function updateInvoicePreview() {
-    const checkboxes = document.querySelectorAll('#uninvoicedAttendancesList input[type="checkbox"]:checked');
-    const selectedIds = Array.from(checkboxes).map(cb => cb.value);
-    
-    if (selectedIds.length === 0) {
-        document.getElementById('invoicePreview').innerHTML = '';
-        document.getElementById('generateInvoiceBtn').disabled = true;
-        return;
-    }
-    
-    const studentName = document.getElementById('invoiceStudentSelect').value;
-    const selectedAtts = allAttendances.filter(att => selectedIds.includes(att._id));
-    const totalHarga = selectedAtts.reduce((sum, att) => sum + att.harga, 0);
-    
-    document.getElementById('invoicePreview').innerHTML = `
-        <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin-top: 20px;">
-            <h4>Preview Invoice</h4>
-            <p><strong>Siswa:</strong> ${studentName}</p>
-            <p><strong>Jumlah Absensi:</strong> ${selectedIds.length}</p>
-            <p><strong>Total Harga:</strong> ${formatCurrency(totalHarga)}</p>
-        </div>
-    `;
-    
-    document.getElementById('generateInvoiceBtn').disabled = false;
-}
-
-// Generate invoice from modal
-async function generateInvoiceFromModal() {
-    const studentName = document.getElementById('invoiceStudentSelect').value;
-    const checkboxes = document.querySelectorAll('#uninvoicedAttendancesList input[type="checkbox"]:checked');
-    const attendanceIds = Array.from(checkboxes).map(cb => cb.value);
-    
-    if (!studentName || attendanceIds.length === 0) {
-        showToast('Pilih siswa dan absensi terlebih dahulu', 'warning');
-        return;
-    }
-    
-    await generateSingleInvoice(studentName, attendanceIds);
-    closeGenerateInvoiceModal();
-}
-
-// Show invoice preview modal
-function showInvoicePreview(invoiceData) {
-    document.getElementById('invoicePreviewContent').innerHTML = `
-        <img src="${invoiceData.invoiceBase64}" alt="Invoice" style="max-width: 100%; border-radius: 8px; box-shadow: var(--shadow-lg);">
-        <div style="margin-top: 20px; text-align: center;">
-            <p><strong>${invoiceData.nama}</strong></p>
-            <p>${invoiceData.attendanceCount} absensi</p>
-            <p>Total: ${formatCurrency(invoiceData.totalHarga)}</p>
-        </div>
-    `;
-    document.getElementById('invoicePreviewModal').style.display = 'block';
-}
-
-// Close invoice preview modal
-function closeInvoicePreviewModal() {
-    document.getElementById('invoicePreviewModal').style.display = 'none';
-    currentInvoiceData = null;
-}
-
-// Download invoice
-function downloadInvoice() {
-    if (!currentInvoiceData) return;
-    
-    const link = document.createElement('a');
-    link.href = currentInvoiceData.invoiceBase64;
-    link.download = currentInvoiceData.fileName;
-    link.click();
-    showToast('Invoice berhasil diunduh', 'success');
-}
-
-// Delete attendance
 async function deleteAttendance(id, nama, tanggal) {
-    if (!confirm(`Apakah Anda yakin ingin menghapus data absensi ini?\n\nNama: ${nama}\nTanggal: ${tanggal}\n\nTindakan ini tidak dapat dibatalkan!`)) {
-        return;
-    }
-    
+    if (!confirm(`Delete attendance for ${nama} on ${tanggal}?`)) return;
+
     try {
-        showToast('Sedang menghapus data...', 'warning');
-        
-        const response = await fetch(`/api/attendances/${id}`, {
-            method: 'DELETE'
-        });
-        
+        const response = await fetch(`/api/attendances/${id}`, { method: 'DELETE' });
         const result = await response.json();
-        
+
         if (result.success) {
-            showToast(`Data absensi untuk ${result.data.nama} berhasil dihapus!`, 'success');
+            showToast('Deleted successfully', 'success');
             loadStatistics();
             loadAttendances(currentPage);
-            loadStudents();
         } else {
-            showToast(result.message || 'Gagal menghapus data', 'error');
+            showToast('Failed to delete', 'error');
         }
     } catch (error) {
-        console.error('Error deleting attendance:', error);
-        showToast('Gagal menghapus data', 'error');
+        showToast('Error deleting', 'error');
     }
 }
 
-// Export data
-async function exportData(format) {
-    try {
-        showToast('Sedang mengexport data...', 'warning');
-        
-        const response = await fetch(`/api/export/attendances?format=${format}`);
-        
-        if (response.ok) {
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `attendances_${new Date().toISOString().split('T')[0]}.${format}`;
-            link.click();
-            window.URL.revokeObjectURL(url);
-            showToast(`Data berhasil diexport sebagai ${format.toUpperCase()}`, 'success');
-        } else {
-            showToast('Gagal export data', 'error');
-        }
-    } catch (error) {
-        console.error('Error exporting data:', error);
-        showToast('Gagal export data', 'error');
-    }
+function viewStudentAttendances(nama) {
+    const filter = document.getElementById('namaFilter');
+    if (filter) filter.value = nama;
+    showTab('attendances');
+    applyFilters();
 }
 
-// Quick search
-function quickSearch() {
-    const searchTerm = document.getElementById('tableSearch').value.toLowerCase();
-    const rows = document.querySelectorAll('#attendancesTableBody tr');
-    
-    rows.forEach(row => {
-        const text = row.textContent.toLowerCase();
-        row.style.display = text.includes(searchTerm) ? '' : 'none';
-    });
-}
-
-// Update pagination
-function updatePagination(pagination) {
-    const paginationEl = document.getElementById('pagination');
-    paginationEl.innerHTML = '';
-    
-    if (pagination.pages <= 1) return;
-    
-    // Previous button
-    const prevBtn = document.createElement('button');
-    prevBtn.textContent = '← Sebelumnya';
-    prevBtn.disabled = pagination.page === 1;
-    prevBtn.onclick = () => loadAttendances(pagination.page - 1);
-    paginationEl.appendChild(prevBtn);
-    
-    // Page numbers
-    const maxVisible = 5;
-    let startPage = Math.max(1, pagination.page - Math.floor(maxVisible / 2));
-    let endPage = Math.min(pagination.pages, startPage + maxVisible - 1);
-    
-    if (endPage - startPage < maxVisible - 1) {
-        startPage = Math.max(1, endPage - maxVisible + 1);
-    }
-    
-    if (startPage > 1) {
-        const firstBtn = document.createElement('button');
-        firstBtn.textContent = '1';
-        firstBtn.onclick = () => loadAttendances(1);
-        if (pagination.page === 1) firstBtn.classList.add('active');
-        paginationEl.appendChild(firstBtn);
-        
-        if (startPage > 2) {
-            const ellipsis = document.createElement('span');
-            ellipsis.textContent = '...';
-            ellipsis.style.padding = '8px';
-            paginationEl.appendChild(ellipsis);
-        }
-    }
-    
-    for (let i = startPage; i <= endPage; i++) {
-        const pageBtn = document.createElement('button');
-        pageBtn.textContent = i;
-        if (i === pagination.page) pageBtn.classList.add('active');
-        pageBtn.onclick = () => loadAttendances(i);
-        paginationEl.appendChild(pageBtn);
-    }
-    
-    if (endPage < pagination.pages) {
-        if (endPage < pagination.pages - 1) {
-            const ellipsis = document.createElement('span');
-            ellipsis.textContent = '...';
-            ellipsis.style.padding = '8px';
-            paginationEl.appendChild(ellipsis);
-        }
-        
-        const lastBtn = document.createElement('button');
-        lastBtn.textContent = pagination.pages;
-        lastBtn.onclick = () => loadAttendances(pagination.pages);
-        if (pagination.page === pagination.pages) lastBtn.classList.add('active');
-        paginationEl.appendChild(lastBtn);
-    }
-    
-    // Next button
-    const nextBtn = document.createElement('button');
-    nextBtn.textContent = 'Selanjutnya →';
-    nextBtn.disabled = pagination.page === pagination.pages;
-    nextBtn.onclick = () => loadAttendances(pagination.page + 1);
-    paginationEl.appendChild(nextBtn);
-}
-
-// Show tab
-function showTab(tabName) {
-    // Update tab buttons
-    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-    event.target.classList.add('active');
-    
-    // Update tab content
-    document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-    document.getElementById(`${tabName}Tab`).classList.add('active');
-    
-    currentTab = tabName;
-    
-    // Load data based on tab
-    if (tabName === 'attendances') {
-        loadAttendances(currentPage);
-    } else if (tabName === 'students') {
-        loadStudents();
-    } else if (tabName === 'charts') {
-        loadStatistics(); // This will also update charts
-    }
-}
-
-// Apply filters
 function applyFilters() {
     currentPage = 1;
     selectedAttendances.clear();
+    updateSelectedCount();
     if (currentTab === 'attendances') {
         loadAttendances(1);
     }
 }
 
-// Clear filters
 function clearFilters() {
-    document.getElementById('namaFilter').value = '';
-    document.getElementById('dateFrom').value = '';
-    document.getElementById('dateTo').value = '';
-    if (document.getElementById('invoiceStatusFilter')) {
-        document.getElementById('invoiceStatusFilter').value = '';
-    }
-    applyFilters();
-}
-
-// Refresh data
-function refreshData() {
-    loadStatistics();
-    if (currentTab === 'attendances') {
-        loadAttendances(currentPage);
-    } else if (currentTab === 'students') {
-        loadStudents();
-    } else if (currentTab === 'charts') {
-        loadStatistics();
-    }
-    showToast('Data telah diupdate', 'success');
-}
-
-// View student attendances
-function viewStudentAttendances(nama) {
-    document.getElementById('namaFilter').value = nama;
-    showTab('attendances');
-    // Manually trigger the tab button
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.classList.remove('active');
-        if (btn.textContent.includes('Daftar Absensi')) {
-            btn.classList.add('active');
-        }
+    ['namaFilter', 'dateFrom', 'dateTo', 'invoiceStatusFilter'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
     });
     applyFilters();
 }
 
-// Show bulk invoice modal
-function showBulkInvoiceModal() {
-    if (selectedAttendances.size === 0) {
-        showToast('Pilih absensi terlebih dahulu', 'warning');
-        return;
-    }
-    bulkGenerateInvoice();
+function refreshData() {
+    loadStatistics();
+    if (currentTab === 'attendances') loadAttendances(currentPage);
+    else if (currentTab === 'students') loadStudents();
+    showToast('Data refreshed', 'success');
 }
 
-// Update charts
+function exportData(format) {
+    window.location.href = `/api/export/attendances?format=${format}`;
+}
+
+function quickSearch() {
+    const term = document.getElementById('tableSearch')?.value.toLowerCase();
+    if (!term) return;
+
+    const rows = document.querySelectorAll('#attendancesTableBody tr');
+    rows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        row.style.display = text.includes(term) ? '' : 'none';
+    });
+}
+
+// --- Modals ---
+
+function showGenerateInvoiceModal() {
+    document.getElementById('generateInvoiceModal').classList.add('active');
+    loadStudents();
+}
+
+function closeGenerateInvoiceModal() {
+    document.getElementById('generateInvoiceModal').classList.remove('active');
+}
+
+function showInvoicePreview(data) {
+    const content = document.getElementById('invoicePreviewContent');
+    if (content) {
+        content.innerHTML = `
+            <div class="preview-container">
+                <img src="${data.invoiceBase64}" alt="Invoice">
+                <div class="preview-details">
+                    <h4>${data.nama}</h4>
+                    <p>${data.attendanceCount} items • ${formatCurrency(data.totalHarga)}</p>
+                </div>
+            </div>
+        `;
+    }
+    document.getElementById('invoicePreviewModal').classList.add('active');
+}
+
+function closeInvoicePreviewModal() {
+    document.getElementById('invoicePreviewModal').classList.remove('active');
+}
+
+function openModal(src, nama, tanggal, deskripsi, harga) {
+    const modal = document.getElementById('imageModal');
+    const img = document.getElementById('modalImage');
+    const info = document.getElementById('modalInfo');
+
+    if (img) img.src = src;
+    if (info) {
+        info.innerHTML = `
+            <h3>${nama}</h3>
+            <div class="meta">
+                <span><i class="far fa-calendar"></i> ${tanggal}</span>
+                <span><i class="fas fa-tag"></i> ${harga}</span>
+            </div>
+            <p>${deskripsi}</p>
+        `;
+    }
+
+    if (modal) modal.classList.add('active');
+}
+
+function closeModal() {
+    document.getElementById('imageModal').classList.remove('active');
+}
+
+async function loadUninvoicedAttendances() {
+    const select = document.getElementById('invoiceStudentSelect');
+    const studentName = select.value;
+    const list = document.getElementById('uninvoicedAttendancesList');
+
+    if (!studentName) {
+        list.innerHTML = '';
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/attendances/student/${encodeURIComponent(studentName)}`);
+        const result = await response.json();
+
+        if (result.success) {
+            const uninvoiced = result.data.filter(att => !att.isInvoiced);
+
+            if (uninvoiced.length === 0) {
+                list.innerHTML = '<div class="empty-state">No pending attendances</div>';
+                return;
+            }
+
+            list.innerHTML = `
+                <div class="selection-header">
+                    <h4>Select Items</h4>
+                    <span class="text-muted">${uninvoiced.length} available</span>
+                </div>
+            `;
+
+            uninvoiced.forEach(att => {
+                const item = document.createElement('div');
+                item.className = 'attendance-select-item';
+                item.innerHTML = `
+                    <input type="checkbox" id="inv_${att._id}" value="${att._id}" onchange="updateInvoicePreview()">
+                    <label for="inv_${att._id}">
+                        <span class="date">${formatDate(att.tanggal)}</span>
+                        <span class="desc">${att.deskripsi}</span>
+                        <span class="price">${formatCurrency(att.harga)}</span>
+                    </label>
+                `;
+                list.appendChild(item);
+            });
+        }
+    } catch (error) {
+        console.error(error);
+    }
+}
+
+function updateInvoicePreview() {
+    const checkboxes = document.querySelectorAll('#uninvoicedAttendancesList input:checked');
+    const btn = document.getElementById('generateInvoiceBtn');
+    const preview = document.getElementById('invoicePreview');
+
+    const count = checkboxes.length;
+
+    if (count > 0) {
+        let total = 0;
+        checkboxes.forEach(cb => {
+            const priceText = cb.nextElementSibling.querySelector('.price').textContent;
+            // Remove non-numeric chars
+            const price = parseInt(priceText.replace(/[^0-9]/g, ''));
+            total += price;
+        });
+
+        preview.innerHTML = `
+            <div class="summary-card">
+                <div class="row">
+                    <span>Selected Items</span>
+                    <strong>${count}</strong>
+                </div>
+                <div class="row total">
+                    <span>Total Amount</span>
+                    <strong>${formatCurrency(total)}</strong>
+                </div>
+            </div>
+        `;
+        btn.disabled = false;
+    } else {
+        preview.innerHTML = '';
+        btn.disabled = true;
+    }
+}
+
+async function generateInvoiceFromModal() {
+    const select = document.getElementById('invoiceStudentSelect');
+    const checkboxes = document.querySelectorAll('#uninvoicedAttendancesList input:checked');
+
+    if (!select.value || checkboxes.length === 0) return;
+
+    const ids = Array.from(checkboxes).map(cb => cb.value);
+    await generateSingleInvoice(select.value, ids);
+    closeGenerateInvoiceModal();
+}
+
+function generateInvoiceFromStudent(nama) {
+    // Open modal and select student
+    showGenerateInvoiceModal();
+    // Wait for students to load then select
+    setTimeout(() => {
+        const select = document.getElementById('invoiceStudentSelect');
+        if (select) {
+            select.value = nama;
+            loadUninvoicedAttendances();
+        }
+    }, 500);
+}
+
+function downloadInvoice() {
+    if (!currentInvoiceData) return;
+    const link = document.createElement('a');
+    link.href = currentInvoiceData.invoiceBase64;
+    link.download = currentInvoiceData.fileName;
+    link.click();
+}
+
+// --- Pagination ---
+
+function updatePagination(pagination) {
+    const el = document.getElementById('pagination');
+    if (!el) return;
+
+    el.innerHTML = '';
+
+    if (pagination.pages <= 1) return;
+
+    const createBtn = (text, page, active = false, disabled = false) => {
+        const btn = document.createElement('button');
+        btn.textContent = text;
+        if (active) btn.classList.add('active');
+        if (disabled) btn.disabled = true;
+        else btn.onclick = () => loadAttendances(page);
+        return btn;
+    };
+
+    el.appendChild(createBtn('«', pagination.page - 1, false, pagination.page === 1));
+
+    // Simple pagination logic
+    for (let i = 1; i <= pagination.pages; i++) {
+        if (
+            i === 1 ||
+            i === pagination.pages ||
+            (i >= pagination.page - 1 && i <= pagination.page + 1)
+        ) {
+            el.appendChild(createBtn(i, i, i === pagination.page));
+        } else if (
+            i === pagination.page - 2 ||
+            i === pagination.page + 2
+        ) {
+            const span = document.createElement('span');
+            span.textContent = '...';
+            span.className = 'pagination-dots';
+            el.appendChild(span);
+        }
+    }
+
+    el.appendChild(createBtn('»', pagination.page + 1, false, pagination.page === pagination.pages));
+}
+
+// --- Charts ---
+
 function updateCharts(stats) {
-    // Revenue chart
-    const revenueCtx = document.getElementById('revenueChart');
-    if (revenueChart) {
-        revenueChart.destroy();
-    }
-    
-    if (stats.revenueByMonth && stats.revenueByMonth.length > 0) {
-        revenueChart = new Chart(revenueCtx, {
-            type: 'line',
-            data: {
-                labels: stats.revenueByMonth.map(item => {
-                    const [year, month] = item.month.split('-');
-                    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-                    return `${monthNames[parseInt(month) - 1]} ${year}`;
-                }),
-                datasets: [{
-                    label: 'Pendapatan (Rp)',
-                    data: stats.revenueByMonth.map(item => item.total),
-                    borderColor: 'rgb(37, 99, 235)',
-                    backgroundColor: 'rgba(37, 99, 235, 0.1)',
-                    tension: 0.4,
-                    fill: true
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: {
-                        display: false
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                return formatCurrency(context.parsed.y);
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            callback: function(value) {
-                                return formatCurrency(value);
-                            }
-                        }
-                    }
-                }
-            }
-        });
-    }
-    
-    // Top students chart
-    const topStudentsCtx = document.getElementById('topStudentsChart');
-    if (topStudentsChart) {
-        topStudentsChart.destroy();
-    }
-    
-    if (stats.topStudents && stats.topStudents.length > 0) {
-        topStudentsChart = new Chart(topStudentsCtx, {
-            type: 'bar',
-            data: {
-                labels: stats.topStudents.map(item => item.nama),
-                datasets: [{
-                    label: 'Jumlah Absensi',
-                    data: stats.topStudents.map(item => item.count),
-                    backgroundColor: 'rgba(37, 99, 235, 0.8)',
-                    borderColor: 'rgb(37, 99, 235)',
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: {
-                        display: false
-                    }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            stepSize: 1
-                        }
-                    }
-                }
-            }
-        });
-    }
-    
-    // Revenue by student chart
-    const revenueByStudentCtx = document.getElementById('revenueByStudentChart');
-    if (revenueByStudentChart) {
-        revenueByStudentChart.destroy();
-    }
-    
-    if (stats.topStudents && stats.topStudents.length > 0) {
-        revenueByStudentChart = new Chart(revenueByStudentCtx, {
-            type: 'doughnut',
-            data: {
-                labels: stats.topStudents.slice(0, 5).map(item => item.nama),
-                datasets: [{
-                    label: 'Pendapatan',
-                    data: stats.topStudents.slice(0, 5).map(item => item.totalHarga),
-                    backgroundColor: [
-                        'rgba(37, 99, 235, 0.8)',
-                        'rgba(16, 185, 129, 0.8)',
-                        'rgba(245, 158, 11, 0.8)',
-                        'rgba(239, 68, 68, 0.8)',
-                        'rgba(139, 92, 246, 0.8)'
-                    ]
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: {
-                        position: 'bottom'
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                return `${context.label}: ${formatCurrency(context.parsed)}`;
-                            }
-                        }
-                    }
-                }
-            }
-        });
-    }
-    
-    // Invoice status chart
-    const invoiceStatusCtx = document.getElementById('invoiceStatusChart');
-    if (invoiceStatusChart) {
-        invoiceStatusChart.destroy();
-    }
-    
-    invoiceStatusChart = new Chart(invoiceStatusCtx, {
-        type: 'pie',
+    const ctx = document.getElementById('revenueChart');
+    if (!ctx) return;
+
+    if (revenueChart) revenueChart.destroy();
+
+    revenueChart = new Chart(ctx, {
+        type: 'line',
         data: {
-            labels: ['Sudah Invoice', 'Belum Invoice'],
+            labels: stats.revenueByMonth.map(m => m.month),
             datasets: [{
-                label: 'Status Invoice',
-                data: [stats.invoicedCount, stats.uninvoicedCount],
-                backgroundColor: [
-                    'rgba(16, 185, 129, 0.8)',
-                    'rgba(245, 158, 11, 0.8)'
-                ]
+                label: 'Revenue',
+                data: stats.revenueByMonth.map(m => m.total),
+                borderColor: '#4361ee',
+                backgroundColor: 'rgba(67, 97, 238, 0.1)',
+                fill: true,
+                tension: 0.4
             }]
         },
         options: {
             responsive: true,
-            plugins: {
-                legend: {
-                    position: 'bottom'
-                }
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true } }
+        }
+    });
+
+    // Top Students
+    const ctx2 = document.getElementById('topStudentsChart');
+    if (ctx2) {
+        if (topStudentsChart) topStudentsChart.destroy();
+        topStudentsChart = new Chart(ctx2, {
+            type: 'bar',
+            data: {
+                labels: stats.topStudents.map(s => s.nama),
+                datasets: [{
+                    label: 'Attendances',
+                    data: stats.topStudents.map(s => s.count),
+                    backgroundColor: '#4361ee',
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: true } }
             }
-        }
-    });
+        });
+    }
+
+    // Invoice Status
+    const ctx3 = document.getElementById('invoiceStatusChart');
+    if (ctx3) {
+        if (invoiceStatusChart) invoiceStatusChart.destroy();
+        invoiceStatusChart = new Chart(ctx3, {
+            type: 'doughnut',
+            data: {
+                labels: ['Invoiced', 'Pending'],
+                datasets: [{
+                    data: [stats.invoicedCount, stats.uninvoicedCount],
+                    backgroundColor: ['#10b981', '#f59e0b'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'bottom' } }
+            }
+        });
+    }
 }
 
-// Modal functions
-function openModal(imageSrc, nama, tanggal, deskripsi, harga) {
-    const modal = document.getElementById('imageModal');
-    const modalImg = document.getElementById('modalImage');
-    const modalInfo = document.getElementById('modalInfo');
-    
-    modalImg.src = imageSrc;
-    modalInfo.innerHTML = `
-        <strong>${nama}</strong><br>
-        Tanggal: ${tanggal}<br>
-        ${deskripsi}<br>
-        Harga: ${harga}
-    `;
-    modal.style.display = 'block';
-}
+// --- Initialization ---
 
-function closeModal() {
-    document.getElementById('imageModal').style.display = 'none';
-}
-
-// Close modal when clicking outside
-window.onclick = function(event) {
-    const modals = ['imageModal', 'generateInvoiceModal', 'invoicePreviewModal'];
-    modals.forEach(modalId => {
-        const modal = document.getElementById(modalId);
-        if (event.target === modal) {
-            if (modalId === 'generateInvoiceModal') closeGenerateInvoiceModal();
-            else if (modalId === 'invoicePreviewModal') closeInvoicePreviewModal();
-            else closeModal();
-        }
-    });
-}
-
-// Initialize on page load
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', () => {
+    initSidebar();
     loadStatistics();
     loadAttendances(1);
-    
-    // Auto refresh every 30 seconds
+
+    // Set default tab
+    showTab('attendances');
+
+    // Auto refresh
     setInterval(() => {
         loadStatistics();
-        if (currentTab === 'attendances') {
-            loadAttendances(currentPage);
-        }
-    }, 30000);
+        if (currentTab === 'attendances') loadAttendances(currentPage);
+    }, 60000);
 });

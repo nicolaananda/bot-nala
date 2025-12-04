@@ -28,6 +28,18 @@ const attendanceSchema = new mongoose.Schema({
 
 const Attendance = mongoose.model('Attendance', attendanceSchema);
 
+// Invoice Schema
+const invoiceSchema = new mongoose.Schema({
+    nama: { type: String, required: true },
+    filename: { type: String, required: true },
+    date: { type: Date, default: Date.now },
+    totalAmount: { type: Number, required: true },
+    attendanceIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Attendance' }],
+    r2Path: { type: String }
+});
+
+const Invoice = mongoose.model('Invoice', invoiceSchema);
+
 // Generate Invoice Function (same as in arap.js)
 async function generateAttendanceInvoice(attendances) {
     const templatePath = './images/invoice.png';
@@ -37,7 +49,7 @@ async function generateAttendanceInvoice(attendances) {
     } else {
         invoice = await Jimp.read(templatePath);
     }
-    
+
     const textColor = 0x70370D;
     let fontSmall, fontMedium, fontCaption;
     try {
@@ -55,34 +67,34 @@ async function generateAttendanceInvoice(attendances) {
             fontCaption = await Jimp.loadFont(Jimp.FONT_SANS_32_BLACK);
         }
     }
-    
+
     const printTextWithColor = (img, font, x, y, text, color = textColor) => {
         const r = (color >> 16) & 0xFF;
         const g = (color >> 8) & 0xFF;
         const b = color & 0xFF;
-        
+
         const textWidth = Jimp.measureText(font, text);
         const textHeight = Jimp.measureTextHeight(font, text);
         const padding = 10;
         const tempImg = new Jimp(textWidth + padding * 2, textHeight + padding * 2, 0x00000000);
-        
+
         tempImg.print(font, padding, padding, text);
-        
+
         tempImg.scan(0, 0, tempImg.bitmap.width, tempImg.bitmap.height, function (x, y, idx) {
             const alpha = this.bitmap.data[idx + 3];
             const red = this.bitmap.data[idx];
             const green = this.bitmap.data[idx + 1];
             const blue = this.bitmap.data[idx + 2];
-            
+
             if (alpha > 0 && red < 128 && green < 128 && blue < 128) {
                 this.bitmap.data[idx] = r;
                 this.bitmap.data[idx + 1] = g;
                 this.bitmap.data[idx + 2] = b;
             }
         });
-        
+
         img.composite(tempImg, x - padding, y - padding);
-        
+
         const boldOffset = 1;
         const tempImg2 = new Jimp(textWidth + padding * 2, textHeight + padding * 2, 0x00000000);
         tempImg2.print(font, padding + boldOffset, padding, text);
@@ -96,14 +108,14 @@ async function generateAttendanceInvoice(attendances) {
         });
         img.composite(tempImg2, x - padding + boldOffset, y - padding);
     };
-    
+
     const namaMurid = attendances[0].nama;
     const invoiceDate = moment().format('DD/MM/YYYY');
     const totalHarga = attendances.reduce((sum, att) => sum + att.harga, 0);
-    
+
     printTextWithColor(invoice, fontSmall, 260, 468, invoiceDate);
     printTextWithColor(invoice, fontSmall, 310, 515, namaMurid);
-    
+
     const photoWidth = 320;
     const photoHeight = 320;
     const photoPositions = [
@@ -112,13 +124,13 @@ async function generateAttendanceInvoice(attendances) {
         { x: 210, y: 1187 },
         { x: 834, y: 1187 }
     ];
-    
+
     const photoCount = Math.min(attendances.length, 4);
-    
+
     for (let i = 0; i < photoCount; i++) {
         const att = attendances[i];
         const pos = photoPositions[i];
-        
+
         try {
             // Load photo from R2, CDN URL, or local file
             let photoBuffer;
@@ -156,15 +168,15 @@ async function generateAttendanceInvoice(attendances) {
                 }
                 photoBuffer = await fs.promises.readFile(att.foto_path);
             }
-            
+
             const photo = await Jimp.read(photoBuffer);
             photo.resize(photoWidth, photoHeight, Jimp.RESIZE_BILINEAR);
             invoice.composite(photo, pos.x, pos.y);
-            
+
             const textY = pos.y + photoHeight + 15;
             const dateStr = moment(att.tanggal).format('DD/MM/YYYY');
             const lineSpacing = 35;
-            
+
             printTextWithColor(invoice, fontSmall, pos.x, textY, `${dateStr}`);
             printTextWithColor(invoice, fontSmall, pos.x, textY + lineSpacing, att.deskripsi.substring(0, 25));
             printTextWithColor(invoice, fontSmall, pos.x, textY + (lineSpacing * 2), `Rp ${att.harga.toLocaleString('id-ID')}`);
@@ -173,16 +185,16 @@ async function generateAttendanceInvoice(attendances) {
             invoice.print(fontSmall, pos.x, pos.y, `Foto tidak ditemukan`);
         }
     }
-    
+
     // Print total price at exact position (above "Total Payment" text - moved down by 40px)
     printTextWithColor(invoice, fontSmall, 587, 1776, `Rp ${totalHarga.toLocaleString('id-ID')}`, 0xFFFFFF);
-    
+
     return await invoice.getBufferAsync(Jimp.MIME_PNG);
 }
 
 // Middleware
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'dashboard', 'public')));
+app.use(express.static(path.join(__dirname, 'dashboard-react', 'dist')));
 
 // CORS
 app.use((req, res, next) => {
@@ -200,16 +212,16 @@ app.get('/api/image/:imagePath(*)', async (req, res) => {
     try {
         const { imagePath } = req.params;
         const imageUrl = `https://cdn-absen.nicola.id/${imagePath}`;
-        
+
         try {
-            const response = await axios.get(imageUrl, { 
+            const response = await axios.get(imageUrl, {
                 responseType: 'arraybuffer',
                 timeout: 10000
             });
-            
+
             const contentType = response.headers['content-type'] || 'image/jpeg';
             const buffer = Buffer.from(response.data);
-            
+
             res.setHeader('Content-Type', contentType);
             res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache 1 year
             res.setHeader('Access-Control-Allow-Origin', '*');
@@ -238,17 +250,17 @@ app.get('/api/attendances', async (req, res) => {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 20;
         const skip = (page - 1) * limit;
-        
+
         const namaFilter = req.query.nama || '';
         const dateFrom = req.query.dateFrom || '';
         const dateTo = req.query.dateTo || '';
-        
+
         let query = {};
-        
+
         if (namaFilter) {
             query.nama = { $regex: namaFilter, $options: 'i' };
         }
-        
+
         if (dateFrom || dateTo) {
             query.tanggal = {};
             if (dateFrom) {
@@ -258,19 +270,19 @@ app.get('/api/attendances', async (req, res) => {
                 query.tanggal.$lte = new Date(dateTo);
             }
         }
-        
+
         const attendances = await Attendance.find(query)
             .sort({ tanggal: -1, createdAt: -1 })
             .skip(skip)
             .limit(limit)
             .lean();
-        
+
         const total = await Attendance.countDocuments(query);
-        
+
         // Convert to base64 for images or use public URL
         const attendancesWithImages = await Promise.all(attendances.map(async (att) => {
             const result = { ...att };
-            
+
             // Check if photo is in R2 or local
             if (att.foto_path.startsWith('http') || att.foto_path.startsWith('https')) {
                 // Photo has public URL, use proxy endpoint to bypass CORS
@@ -317,10 +329,10 @@ app.get('/api/attendances', async (req, res) => {
             } else {
                 result.foto_base64 = null;
             }
-            
+
             return result;
         }));
-        
+
         res.json({
             success: true,
             data: attendancesWithImages,
@@ -348,10 +360,10 @@ app.get('/api/statistics', async (req, res) => {
         const totalRevenue = await Attendance.aggregate([
             { $group: { _id: null, total: { $sum: '$harga' } } }
         ]);
-        
+
         const invoicedCount = await Attendance.countDocuments({ isInvoiced: true });
         const uninvoicedCount = await Attendance.countDocuments({ isInvoiced: false });
-        
+
         // Revenue by month (last 6 months)
         const sixMonthsAgo = moment().subtract(6, 'months').startOf('month').toDate();
         const revenueByMonth = await Attendance.aggregate([
@@ -368,7 +380,7 @@ app.get('/api/statistics', async (req, res) => {
             },
             { $sort: { '_id.year': 1, '_id.month': 1 } }
         ]);
-        
+
         // Top students by attendance count
         const topStudents = await Attendance.aggregate([
             {
@@ -381,7 +393,7 @@ app.get('/api/statistics', async (req, res) => {
             { $sort: { count: -1 } },
             { $limit: 10 }
         ]);
-        
+
         res.json({
             success: true,
             data: {
@@ -411,10 +423,14 @@ app.get('/api/statistics', async (req, res) => {
     }
 });
 
-// Get students list
+// Get students list with pagination
 app.get('/api/students', async (req, res) => {
     try {
-        const students = await Attendance.aggregate([
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 20;
+        const skip = (page - 1) * limit;
+
+        const result = await Attendance.aggregate([
             {
                 $group: {
                     _id: '$nama',
@@ -430,9 +446,19 @@ app.get('/api/students', async (req, res) => {
                     firstAttendance: { $min: '$tanggal' }
                 }
             },
-            { $sort: { _id: 1 } }
+            { $sort: { _id: 1 } },
+            {
+                $facet: {
+                    metadata: [{ $count: "total" }],
+                    data: [{ $skip: skip }, { $limit: limit }]
+                }
+            }
         ]);
-        
+
+        const students = result[0].data;
+        const total = result[0].metadata[0]?.total || 0;
+        const pages = Math.ceil(total / limit);
+
         res.json({
             success: true,
             data: students.map(s => ({
@@ -443,7 +469,13 @@ app.get('/api/students', async (req, res) => {
                 uninvoicedCount: s.uninvoicedCount,
                 lastAttendance: s.lastAttendance,
                 firstAttendance: s.firstAttendance
-            }))
+            })),
+            pagination: {
+                page,
+                limit,
+                total,
+                pages
+            }
         });
     } catch (error) {
         console.error('Error fetching students:', error);
@@ -458,15 +490,15 @@ app.get('/api/students', async (req, res) => {
 app.get('/api/attendances/student/:nama', async (req, res) => {
     try {
         const { nama } = req.params;
-        const attendances = await Attendance.find({ 
+        const attendances = await Attendance.find({
             nama: { $regex: nama, $options: 'i' }
         })
-        .sort({ tanggal: -1 })
-        .lean();
-        
+            .sort({ tanggal: -1 })
+            .lean();
+
         const attendancesWithImages = await Promise.all(attendances.map(async (att) => {
             const result = { ...att };
-            
+
             // Check if photo is in R2 or local
             if (att.foto_path.startsWith('http') || att.foto_path.startsWith('https')) {
                 // Photo has public URL, use proxy endpoint to bypass CORS
@@ -512,10 +544,10 @@ app.get('/api/attendances/student/:nama', async (req, res) => {
             } else {
                 result.foto_base64 = null;
             }
-            
+
             return result;
         }));
-        
+
         res.json({
             success: true,
             data: attendancesWithImages
@@ -533,14 +565,14 @@ app.get('/api/attendances/student/:nama', async (req, res) => {
 app.post('/api/invoice/generate', async (req, res) => {
     try {
         const { nama, attendanceIds } = req.body;
-        
+
         if (!nama && !attendanceIds) {
             return res.status(400).json({
                 success: false,
                 message: 'Nama siswa atau attendanceIds harus disediakan'
             });
         }
-        
+
         let attendances;
         if (attendanceIds && Array.isArray(attendanceIds)) {
             // Generate invoice from specific attendance IDs
@@ -554,34 +586,34 @@ app.post('/api/invoice/generate', async (req, res) => {
                 isInvoiced: false
             }).sort({ tanggal: 1 }).lean();
         }
-        
+
         if (attendances.length === 0) {
             return res.status(404).json({
                 success: false,
                 message: 'Tidak ada data absensi yang ditemukan'
             });
         }
-        
+
         // Generate invoice buffer
         const invoiceBuffer = await generateAttendanceInvoice(attendances);
         const invoiceFileName = `invoice_${attendances[0].nama.toLowerCase().replace(/\s+/g, '_')}_${moment().format('DD-MM-YYYY')}.png`;
         const invoicePath = path.join(__dirname, 'invoice', invoiceFileName);
-        
+
         // Ensure invoice directory exists
         const invoiceDir = path.join(__dirname, 'invoice');
         if (!fs.existsSync(invoiceDir)) {
             fs.mkdirSync(invoiceDir, { recursive: true });
         }
-        
+
         // Save invoice file
         fs.writeFileSync(invoicePath, invoiceBuffer);
-        
+
         // Try to upload to R2
         try {
             const r2InvoicePath = `invoice/${invoiceFileName}`;
             const r2Url = await uploadToR2(invoiceBuffer, r2InvoicePath, 'image/png');
             console.log(`✅ Invoice uploaded to R2: ${r2Url}`);
-            
+
             // Delete local file after successful R2 upload
             try {
                 if (fs.existsSync(invoicePath)) {
@@ -594,17 +626,27 @@ app.post('/api/invoice/generate', async (req, res) => {
         } catch (r2Error) {
             console.warn('⚠️ R2 upload failed for invoice, keeping local only:', r2Error.message);
         }
-        
+
         // Mark attendances as invoiced
         const attendanceIdsToUpdate = attendances.map(att => att._id);
         await Attendance.updateMany(
             { _id: { $in: attendanceIdsToUpdate } },
             { $set: { isInvoiced: true } }
         );
-        
+
+        // Save invoice record to database
+        const newInvoice = new Invoice({
+            nama: attendances[0].nama,
+            filename: invoiceFileName,
+            totalAmount: attendances.reduce((sum, att) => sum + att.harga, 0),
+            attendanceIds: attendanceIdsToUpdate,
+            r2Path: `invoice/${invoiceFileName}` // Assuming this is the path used for R2
+        });
+        await newInvoice.save();
+
         // Convert to base64 for response
         const base64Invoice = invoiceBuffer.toString('base64');
-        
+
         res.json({
             success: true,
             message: 'Invoice berhasil dibuat',
@@ -631,14 +673,14 @@ app.get('/api/invoice/:filename', async (req, res) => {
     try {
         const { filename } = req.params;
         const invoicePath = path.join(__dirname, 'invoice', filename);
-        
+
         if (!fs.existsSync(invoicePath)) {
             return res.status(404).json({
                 success: false,
                 message: 'Invoice tidak ditemukan'
             });
         }
-        
+
         const invoiceBuffer = fs.readFileSync(invoicePath);
         res.setHeader('Content-Type', 'image/png');
         res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
@@ -652,28 +694,49 @@ app.get('/api/invoice/:filename', async (req, res) => {
     }
 });
 
+// Get invoices by student name
+app.get('/api/invoices/student/:nama', async (req, res) => {
+    try {
+        const { nama } = req.params;
+        const invoices = await Invoice.find({
+            nama: { $regex: nama, $options: 'i' }
+        }).sort({ date: -1 });
+
+        res.json({
+            success: true,
+            data: invoices
+        });
+    } catch (error) {
+        console.error('Error fetching student invoices:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+});
+
 // Delete attendance by ID
 app.delete('/api/attendances/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        
+
         const attendance = await Attendance.findById(id);
-        
+
         if (!attendance) {
             return res.status(404).json({
                 success: false,
                 message: 'Data absensi tidak ditemukan'
             });
         }
-        
+
         // Get info before delete
         const namaSiswa = attendance.nama;
         const tanggalFormatted = moment(attendance.tanggal).format('DD/MM/YYYY');
         const fotoPath = attendance.foto_path;
-        
+
         // Delete from database
         await Attendance.findByIdAndDelete(id);
-        
+
         // Delete photo from R2 or local file
         if (fotoPath.startsWith('http') || fotoPath.startsWith('https') || fotoPath.startsWith('absen/')) {
             // Photo is in R2
@@ -690,7 +753,7 @@ app.delete('/api/attendances/:id', async (req, res) => {
                 console.error('Error deleting photo file:', err);
             }
         }
-        
+
         res.json({
             success: true,
             message: 'Data absensi berhasil dihapus',
@@ -714,7 +777,7 @@ app.get('/api/export/attendances', async (req, res) => {
     try {
         const format = req.query.format || 'json';
         const attendances = await Attendance.find({}).sort({ tanggal: -1 }).lean();
-        
+
         if (format === 'csv') {
             // Convert to CSV
             const headers = ['Nama', 'Tanggal', 'Deskripsi', 'Harga', 'Invoice', 'Created At'];
@@ -726,9 +789,9 @@ app.get('/api/export/attendances', async (req, res) => {
                 att.isInvoiced ? 'Sudah' : 'Belum',
                 moment(att.createdAt).format('DD/MM/YYYY HH:mm:ss')
             ]);
-            
+
             const csv = [headers.join(','), ...rows.map(row => row.map(cell => `"${cell}"`).join(','))].join('\n');
-            
+
             res.setHeader('Content-Type', 'text/csv');
             res.setHeader('Content-Disposition', `attachment; filename="attendances_${moment().format('DD-MM-YYYY')}.csv"`);
             res.send(csv);
@@ -751,9 +814,16 @@ app.get('/api/export/attendances', async (req, res) => {
     }
 });
 
-// Serve dashboard HTML
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'dashboard', 'public', 'index.html'));
+// Serve static files from Vue build
+app.use(express.static(path.join(__dirname, 'dashboard-vue', 'dist')));
+
+// Serve dashboard HTML for all other routes (SPA fallback)
+app.get('*', (req, res) => {
+    // Skip API routes
+    if (req.path.startsWith('/api') || req.path.startsWith('/absen') || req.path.startsWith('/invoice')) {
+        return res.status(404).json({ success: false, message: 'Not Found' });
+    }
+    res.sendFile(path.join(__dirname, 'dashboard-vue', 'dist', 'index.html'));
 });
 
 // Connect MongoDB and start server
@@ -766,7 +836,7 @@ async function startServer() {
             console.error(chalk.red('❌ Dashboard: global.mongodblink belum didefinisikan di settings.js.'));
             process.exit(1);
         }
-        
+
         app.listen(PORT, () => {
             console.log(chalk.green(`✅ Dashboard server berjalan di http://localhost:${PORT}`));
         });

@@ -1,3 +1,12 @@
+# Stage 1: Build Vue Frontend
+FROM node:20 AS builder
+WORKDIR /app/dashboard-vue
+COPY dashboard-vue/package*.json ./
+RUN npm install
+COPY dashboard-vue .
+RUN npm run build
+
+# Stage 2: Production Environment
 FROM node:20-slim
 
 # Install system dependencies
@@ -10,18 +19,21 @@ RUN apt-get update && apt-get install -y \
 # Set working directory
 WORKDIR /app
 
-# Copy package files
+# Copy root package files and install production dependencies
 COPY package*.json ./
+RUN npm install --force --production
 
-# Install dependencies
-RUN npm install --force
+# Copy built frontend assets from builder stage
+COPY --from=builder /app/dashboard-vue/dist ./dashboard-vue/dist
 
 # Copy application files
 COPY . .
 
-# Expose ports (dashboard uses 1395 by default)
-EXPOSE 1395
+# Ensure start script is executable
+RUN chmod +x start.sh
 
-# Default command (can be overridden in docker-compose)
-CMD ["node", "index.js"]
+# Expose ports (dashboard uses 3001/3002 by default)
+EXPOSE 3001 3002
 
+# Start both bot and dashboard
+CMD ["./start.sh"]
