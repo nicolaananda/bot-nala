@@ -37,9 +37,10 @@ services:
       - ./absen:/app/absen
       - ./invoice:/app/invoice
       - ./images:/app/images
-      - ./dashboard:/app/dashboard
     env_file:
       - .env
+    environment:
+      - DASHBOARD_PORT=1395
     networks:
       - bot-network
     depends_on:
