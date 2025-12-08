@@ -9,8 +9,14 @@ const Jimp = require('jimp');
 const axios = require('axios');
 const { uploadToR2, downloadFromR2, deleteFromR2, getR2PublicUrl } = require('./lib/r2');
 
-// Telegram Bot Token
-const TELEGRAM_BOT_TOKEN = '7172018274:AAFeKLs1aU4_TLrF5L5yD_Rl4F1HyY3TGtA';
+// Telegram Bot Token (from environment variable)
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+
+if (!TELEGRAM_BOT_TOKEN) {
+    console.error(chalk.red('❌ Telegram Bot: TELEGRAM_BOT_TOKEN tidak ditemukan di environment variable!'));
+    console.error(chalk.yellow('💡 Tambahkan TELEGRAM_BOT_TOKEN ke file .env'));
+    process.exit(1);
+}
 
 // Create bot instance
 const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
