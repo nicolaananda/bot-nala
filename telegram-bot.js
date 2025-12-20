@@ -295,8 +295,8 @@ async function generateAttendanceInvoice(attendances) {
     const totalHarga = attendances.reduce((sum, att) => sum + att.harga, 0);
 
     // Fill in invoice fields
-    printTextWithColor(invoice, fontSmall, 260, 468, invoiceDate);
-    printTextWithColor(invoice, fontSmall, 310, 515, namaMurid);
+    printTextWithColor(invoice, fonts.small, 260, 468, invoiceDate);
+    printTextWithColor(invoice, fonts.small, 310, 515, namaMurid);
 
     // Photo dimensions
     const photoWidth = 320;
