@@ -344,8 +344,8 @@ async function generateAttendanceInvoice(attendances) {
 
             const photo = await Jimp.read(photoBuffer);
 
-            // Resize to invoice dimensions (keep original quality)
-            photo.cover(photoWidth, photoHeight, Jimp.HORIZONTAL_ALIGN_CENTER | Jimp.VERTICAL_ALIGN_MIDDLE, Jimp.RESIZE_BILINEAR);
+            // Resize to invoice dimensions (stretch to fit, same as original)
+            photo.resize(photoWidth, photoHeight, Jimp.RESIZE_BILINEAR);
 
             invoice.composite(photo, pos.x, pos.y);
 
