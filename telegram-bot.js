@@ -560,8 +560,8 @@ bot.on('message', async (msg) => {
                         image.scaleToFit(maxDimension, maxDimension, Jimp.RESIZE_BILINEAR);
                     }
                     image.quality(75);
-                    photoBuffer = await image.getBufferAsync(Jimp.MIME_WEBP);
-                    console.log(`📦 Foto dikonversi ke WebP (${rawBuffer.length} → ${photoBuffer.length} bytes)`);
+                    photoBuffer = await image.getBufferAsync(Jimp.MIME_JPEG);
+                    console.log(`📦 Foto dikonversi ke JPEG (${rawBuffer.length} → ${photoBuffer.length} bytes)`);
                 } catch (err) {
                     console.error('Error downloading/converting photo:', err);
                     return await bot.sendMessage(chatId, `⚠️ Gagal mendownload foto: ${err.message}`);
@@ -569,18 +569,18 @@ bot.on('message', async (msg) => {
 
                 // Get current time for filename
                 const jamSekarang = moment().format('HHmmss');
-                const fotoFileName = `absen/${nama.toLowerCase().replace(/\s+/g, '_')}_${day}-${month}-${year}_${jamSekarang}.webp`;
+                const fotoFileName = `absen/${nama.toLowerCase().replace(/\s+/g, '_')}_${day}-${month}-${year}_${jamSekarang}.jpg`;
 
                 // Try to upload to R2, fallback to local storage
                 let fotoPath;
                 try {
-                    const r2Url = await uploadToR2(photoBuffer, fotoFileName, 'image/webp');
+                    const r2Url = await uploadToR2(photoBuffer, fotoFileName, 'image/jpeg');
                     fotoPath = r2Url;
                     console.log(`✅ Foto uploaded to R2: ${fotoPath}`);
                 } catch (r2Error) {
                     console.warn('⚠️ R2 upload failed, saving locally:', r2Error.message);
                     // Fallback to local storage
-                    const localPath = `./absen/${fotoFileName.replace('absen/', '')}`; // already .webp
+                    const localPath = `./absen/${fotoFileName.replace('absen/', '')}`; // already .jpg
 
                     // Ensure absen directory exists
                     const absenDir = path.join(__dirname, 'absen');
