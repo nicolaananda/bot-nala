@@ -551,26 +551,36 @@ bot.on('message', async (msg) => {
                     const fileUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${file.file_path}`;
 
                     const response = await axios.get(fileUrl, { responseType: 'arraybuffer' });
-                    photoBuffer = Buffer.from(response.data);
+                    const rawBuffer = Buffer.from(response.data);
+
+                    // Convert to WebP with reduced quality to save storage space
+                    const image = await Jimp.read(rawBuffer);
+                    const maxDimension = 800;
+                    if (image.bitmap.width > maxDimension || image.bitmap.height > maxDimension) {
+                        image.scaleToFit(maxDimension, maxDimension, Jimp.RESIZE_BILINEAR);
+                    }
+                    image.quality(75);
+                    photoBuffer = await image.getBufferAsync(Jimp.MIME_WEBP);
+                    console.log(`📦 Foto dikonversi ke WebP (${rawBuffer.length} → ${photoBuffer.length} bytes)`);
                 } catch (err) {
-                    console.error('Error downloading photo:', err);
+                    console.error('Error downloading/converting photo:', err);
                     return await bot.sendMessage(chatId, `⚠️ Gagal mendownload foto: ${err.message}`);
                 }
 
                 // Get current time for filename
                 const jamSekarang = moment().format('HHmmss');
-                const fotoFileName = `absen/${nama.toLowerCase().replace(/\s+/g, '_')}_${day}-${month}-${year}_${jamSekarang}.jpg`;
+                const fotoFileName = `absen/${nama.toLowerCase().replace(/\s+/g, '_')}_${day}-${month}-${year}_${jamSekarang}.webp`;
 
                 // Try to upload to R2, fallback to local storage
                 let fotoPath;
                 try {
-                    const r2Url = await uploadToR2(photoBuffer, fotoFileName, 'image/jpeg');
+                    const r2Url = await uploadToR2(photoBuffer, fotoFileName, 'image/webp');
                     fotoPath = r2Url;
                     console.log(`✅ Foto uploaded to R2: ${fotoPath}`);
                 } catch (r2Error) {
                     console.warn('⚠️ R2 upload failed, saving locally:', r2Error.message);
                     // Fallback to local storage
-                    const localPath = `./absen/${fotoFileName.replace('absen/', '')}`;
+                    const localPath = `./absen/${fotoFileName.replace('absen/', '')}`; // already .webp
 
                     // Ensure absen directory exists
                     const absenDir = path.join(__dirname, 'absen');
